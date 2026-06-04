@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 from collections import defaultdict
+from datetime import datetime
 import json
 import os
 
@@ -17,13 +18,15 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="?", intents=intents)
 
 WARNINGS_FILE = "warnings.json"
+CONFIG_FILE = "config.json"
 
+
+# ── Persistence ────────────────────────────────────────────────────────────────
 
 def load_warnings():
     if os.path.exists(WARNINGS_FILE):
         with open(WARNINGS_FILE, "r") as f:
             data = json.load(f)
-        # Convert to defaultdict structure
         result = defaultdict(lambda: defaultdict(list))
         for guild_id, users in data.items():
             for user_id, warns in users.items():
@@ -37,7 +40,46 @@ def save_warnings(warnings):
         json.dump({g: dict(u) for g, u in warnings.items()}, f, indent=2)
 
 
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+
+def save_config(config):
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(config, f, indent=2)
+
+
 warnings = load_warnings()
+config = load_config()
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+async def send_log(guild, embed):
+    guild_id = str(guild.id)
+    channel_id = config.get(guild_id, {}).get("log_channel")
+    if not channel_id:
+        return
+    channel = guild.get_channel(int(channel_id))
+    if channel:
+        await channel.send(embed=embed)
+
+
+# ── Config ─────────────────────────────────────────────────────────────────────
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def setlog(ctx, channel: discord.TextChannel):
+    """?setlog #channel — set the log channel"""
+    guild_id = str(ctx.guild.id)
+    if guild_id not in config:
+        config[guild_id] = {}
+    config[guild_id]["log_channel"] = str(channel.id)
+    save_config(config)
+    await ctx.send(f"✅ Log channel set to {channel.mention}.")
 
 
 # ── Ban ────────────────────────────────────────────────────────────────────────
@@ -61,7 +103,14 @@ async def ban(ctx, member: discord.Member, *, reason: str = "No reason provided.
 
     await ctx.guild.ban(member, reason=reason, delete_message_days=0)
     await ctx.send(f"✅ **{member}** has been banned. {dm_status}")
-    print(f"Banned {member} | Reason: {reason} | {dm_status}")
+
+    embed = discord.Embed(title="🔨 Member Banned", color=discord.Color.red(),
+                          timestamp=datetime.utcnow())
+    embed.add_field(name="User", value=f"{member} (`{member.id}`)", inline=False)
+    embed.add_field(name="Reason", value=reason, inline=False)
+    embed.add_field(name="Moderator", value=str(ctx.author), inline=False)
+    embed.add_field(name="DM", value=dm_status, inline=False)
+    await send_log(ctx.guild, embed)
 
 
 # ── Warn ───────────────────────────────────────────────────────────────────────
@@ -91,7 +140,15 @@ async def warn(ctx, member: discord.Member, *, reason: str = "No reason provided
         dm_status = "Could not send DM."
 
     await ctx.send(f"⚠️ **{member}** has been warned. (Total: {count}) {dm_status}")
-    print(f"Warned {member} | Reason: {reason} | Total: {count}")
+
+    embed = discord.Embed(title="⚠️ Member Warned", color=discord.Color.orange(),
+                          timestamp=datetime.utcnow())
+    embed.add_field(name="User", value=f"{member} (`{member.id}`)", inline=False)
+    embed.add_field(name="Reason", value=reason, inline=False)
+    embed.add_field(name="Moderator", value=str(ctx.author), inline=False)
+    embed.add_field(name="Total Warnings", value=str(count), inline=False)
+    embed.add_field(name="DM", value=dm_status, inline=False)
+    await send_log(ctx.guild, embed)
 
 
 @bot.command()
@@ -106,10 +163,7 @@ async def warnings(ctx, member: discord.Member):
         await ctx.send(f"✅ **{member}** has no warnings.")
         return
 
-    embed = discord.Embed(
-        title=f"Warnings for {member}",
-        color=discord.Color.orange()
-    )
+    embed = discord.Embed(title=f"Warnings for {member}", color=discord.Color.orange())
     for i, w in enumerate(user_warns, 1):
         embed.add_field(
             name=f"Warning {i}",
@@ -129,7 +183,6 @@ async def clearwarns(ctx, member: discord.Member):
     warnings[guild_id][user_id].clear()
     save_warnings(warnings)
     await ctx.send(f"✅ Cleared all warnings for **{member}**.")
-    print(f"Cleared warnings for {member}")
 
 
 # ── Error handler ──────────────────────────────────────────────────────────────
