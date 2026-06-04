@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os
 
@@ -223,6 +223,65 @@ async def clearwarns(ctx, member: discord.Member):
     warn_data[guild_id][user_id].clear()
     save_warnings(warn_data)
     await ctx.send(f"✅ Cleared all warnings for **{member}**.")
+
+
+# ── Mute ───────────────────────────────────────────────────────────────────────
+
+def parse_duration(duration: str) -> timedelta:
+    """Parse duration strings like 10m, 2h, 1d, 30s into a timedelta."""
+    units = {"s": "seconds", "m": "minutes", "h": "hours", "d": "days"}
+    if duration[-1] not in units:
+        raise ValueError("Invalid unit. Use s, m, h, or d (e.g. 10m, 2h, 1d).")
+    amount = int(duration[:-1])
+    return timedelta(**{units[duration[-1]]: amount})
+
+
+@bot.hybrid_command(name="mute", description="Timeout a member for a duration (e.g. 10m, 2h, 1d).")
+@commands.has_permissions(moderate_members=True)
+async def mute(ctx, member: discord.Member, duration: str, *, reason: str = "No reason provided."):
+    try:
+        delta = parse_duration(duration)
+    except ValueError as e:
+        await ctx.send(f"❌ {e}")
+        return
+
+    until = datetime.utcnow() + delta
+
+    try:
+        await member.send(
+            f"🔇 You have been muted in **{ctx.guild.name}** for **{duration}**.\n"
+            f"**Reason:** {reason}"
+        )
+        dm_status = "DM sent."
+    except discord.Forbidden:
+        dm_status = "Could not send DM."
+
+    await member.timeout(until, reason=reason)
+    await ctx.send(f"🔇 **{member}** has been muted for **{duration}**. {dm_status}")
+
+    embed = discord.Embed(title="🔇 Member Muted", color=discord.Color.dark_grey(),
+                          timestamp=datetime.utcnow())
+    embed.add_field(name="User", value=f"{member} (`{member.id}`)", inline=False)
+    embed.add_field(name="Duration", value=duration, inline=False)
+    embed.add_field(name="Reason", value=reason, inline=False)
+    embed.add_field(name="Moderator", value=str(ctx.author), inline=False)
+    embed.add_field(name="Expires", value=f"<t:{int(until.timestamp())}:R>", inline=False)
+    embed.add_field(name="DM", value=dm_status, inline=False)
+    await send_log(ctx.guild, embed)
+
+
+@bot.hybrid_command(name="unmute", description="Remove a timeout from a member.")
+@commands.has_permissions(moderate_members=True)
+async def unmute(ctx, member: discord.Member, *, reason: str = "No reason provided."):
+    await member.timeout(None, reason=reason)
+    await ctx.send(f"🔊 **{member}** has been unmuted.")
+
+    embed = discord.Embed(title="🔊 Member Unmuted", color=discord.Color.green(),
+                          timestamp=datetime.utcnow())
+    embed.add_field(name="User", value=f"{member} (`{member.id}`)", inline=False)
+    embed.add_field(name="Reason", value=reason, inline=False)
+    embed.add_field(name="Moderator", value=str(ctx.author), inline=False)
+    await send_log(ctx.guild, embed)
 
 
 # ── Error handler ──────────────────────────────────────────────────────────────
