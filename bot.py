@@ -175,6 +175,27 @@ async def warnings(ctx, member: discord.Member):
 
 @bot.command()
 @commands.has_permissions(manage_messages=True)
+async def removewarn(ctx, member: discord.Member, index: int):
+    """?removewarn @user <number> — remove a specific warning by number"""
+    guild_id = str(ctx.guild.id)
+    user_id = str(member.id)
+    user_warns = warn_data[guild_id][user_id]
+
+    if not user_warns:
+        await ctx.send(f"✅ **{member}** has no warnings.")
+        return
+
+    if index < 1 or index > len(user_warns):
+        await ctx.send(f"❌ Invalid warning number. **{member}** has {len(user_warns)} warning(s).")
+        return
+
+    removed = user_warns.pop(index - 1)
+    save_warnings(warn_data)
+    await ctx.send(f"✅ Removed warning {index} from **{member}**: *{removed['reason']}*")
+
+
+@bot.command()
+@commands.has_permissions(manage_messages=True)
 async def clearwarns(ctx, member: discord.Member):
     """?clearwarns @user — clear all warnings"""
     guild_id = str(ctx.guild.id)
