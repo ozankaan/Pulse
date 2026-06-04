@@ -8,7 +8,6 @@ if not TOKEN:
     raise RuntimeError("DISCORD_BOT_TOKEN environment secret is not set.")
 
 intents = discord.Intents.default()
-intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
