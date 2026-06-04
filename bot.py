@@ -1,6 +1,5 @@
 import discord
 from discord.ext import commands
-import asyncio
 import os
 
 TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
@@ -15,31 +14,41 @@ intents.bans = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 
-@bot.event
-async def on_member_remove(member):
-    # Wait briefly for the audit log to register the ban
-    await asyncio.sleep(2)
+@bot.command()
+@commands.has_permissions(ban_members=True)
+async def ban(ctx, member: discord.Member, *, reason: str = "No reason provided."):
+    """Usage: !ban @user [reason]"""
 
+    # Send DM first while the user is still in the server
     try:
-        guild = member.guild
-        async for entry in guild.audit_logs(limit=5, action=discord.AuditLogAction.ban):
-            if entry.target.id == member.id:
-                # It was a ban — send the DM
-                try:
-                    await member.send(
-                        "You have been banned from Decimated.\n"
-                        "If you believe this was a mistake, you can appeal here:\n"
-                        "https://discord.gg/aKyWGZsrj"
-                    )
-                    print(f"DM successfully sent to {member}")
-                except discord.Forbidden:
-                    print(f"Could not send DM to {member} (DMs disabled or bot blocked).")
-                except Exception as error:
-                    print(f"Error sending DM: {error}")
-                break
+        await member.send(
+            f"You have been banned from **{ctx.guild.name}**.\n"
+            f"**Reason:** {reason}\n\n"
+            "If you believe this was a mistake, you can appeal here:\n"
+            "https://discord.gg/aKyWGZsrj"
+        )
+        dm_status = "DM sent."
+    except discord.Forbidden:
+        dm_status = "Could not send DM (DMs disabled or bot blocked)."
+    except Exception as e:
+        dm_status = f"DM error: {e}"
 
-    except Exception as error:
-        print(f"Error checking audit log: {error}")
+    # Now ban the user
+    await ctx.guild.ban(member, reason=reason, delete_message_days=0)
+    await ctx.send(f"✅ **{member}** has been banned. {dm_status}")
+    print(f"Banned {member} | Reason: {reason} | {dm_status}")
+
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ You don't have permission to use this command.")
+    elif isinstance(error, commands.MemberNotFound):
+        await ctx.send("❌ Member not found.")
+    elif isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send("❌ Usage: `!ban @user [reason]`")
+    else:
+        print(f"Command error: {error}")
 
 
 @bot.event
