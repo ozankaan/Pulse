@@ -70,10 +70,9 @@ async def send_log(guild, embed):
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
-@bot.command()
+@bot.hybrid_command(name="setlog", description="Set the channel where mod actions are logged.")
 @commands.has_permissions(administrator=True)
 async def setlog(ctx, channel: discord.TextChannel):
-    """?setlog #channel — set the log channel"""
     guild_id = str(ctx.guild.id)
     if guild_id not in config:
         config[guild_id] = {}
@@ -84,10 +83,9 @@ async def setlog(ctx, channel: discord.TextChannel):
 
 # ── Ban ────────────────────────────────────────────────────────────────────────
 
-@bot.command()
+@bot.hybrid_command(name="ban", description="Ban a member and send them an appeal link via DM.")
 @commands.has_permissions(ban_members=True)
 async def ban(ctx, member: discord.Member, *, reason: str = "No reason provided."):
-    """?ban @user [reason]"""
     try:
         await member.send(
             f"You have been banned from **{ctx.guild.name}**.\n"
@@ -115,10 +113,9 @@ async def ban(ctx, member: discord.Member, *, reason: str = "No reason provided.
 
 # ── Warn ───────────────────────────────────────────────────────────────────────
 
-@bot.command()
+@bot.hybrid_command(name="warn", description="Warn a member and notify them via DM.")
 @commands.has_permissions(manage_messages=True)
 async def warn(ctx, member: discord.Member, *, reason: str = "No reason provided."):
-    """?warn @user [reason]"""
     guild_id = str(ctx.guild.id)
     user_id = str(member.id)
 
@@ -151,10 +148,9 @@ async def warn(ctx, member: discord.Member, *, reason: str = "No reason provided
     await send_log(ctx.guild, embed)
 
 
-@bot.command()
+@bot.hybrid_command(name="warnings", description="List all warnings for a member.")
 @commands.has_permissions(manage_messages=True)
 async def warnings(ctx, member: discord.Member):
-    """?warnings @user — list a user's warnings"""
     guild_id = str(ctx.guild.id)
     user_id = str(member.id)
     user_warns = warn_data[guild_id][user_id]
@@ -173,10 +169,9 @@ async def warnings(ctx, member: discord.Member):
     await ctx.send(embed=embed)
 
 
-@bot.command()
+@bot.hybrid_command(name="removewarn", description="Remove a specific warning from a member by its number.")
 @commands.has_permissions(manage_messages=True)
 async def removewarn(ctx, member: discord.Member, index: int):
-    """?removewarn @user <number> — remove a specific warning by number"""
     guild_id = str(ctx.guild.id)
     user_id = str(member.id)
     user_warns = warn_data[guild_id][user_id]
@@ -186,7 +181,7 @@ async def removewarn(ctx, member: discord.Member, index: int):
         return
 
     if index < 1 or index > len(user_warns):
-        await ctx.send(f"❌ Invalid warning number. **{member}** has {len(user_warns)} warning(s).")
+        await ctx.send(f"❌ Invalid number. **{member}** has {len(user_warns)} warning(s).")
         return
 
     removed = user_warns.pop(index - 1)
@@ -194,10 +189,9 @@ async def removewarn(ctx, member: discord.Member, index: int):
     await ctx.send(f"✅ Removed warning {index} from **{member}**: *{removed['reason']}*")
 
 
-@bot.command()
+@bot.hybrid_command(name="clearwarns", description="Clear all warnings for a member.")
 @commands.has_permissions(manage_messages=True)
 async def clearwarns(ctx, member: discord.Member):
-    """?clearwarns @user — clear all warnings"""
     guild_id = str(ctx.guild.id)
     user_id = str(member.id)
 
@@ -222,7 +216,8 @@ async def on_command_error(ctx, error):
 
 @bot.event
 async def on_ready():
-    print(f"Bot is online as {bot.user}")
+    await bot.tree.sync()
+    print(f"Bot is online as {bot.user} — slash commands synced.")
 
 
 bot.run(TOKEN)
