@@ -18,13 +18,12 @@ async def on_ready():
 @bot.event
 async def on_member_ban(guild, user):
     try:
+        user = await bot.fetch_user(user.id)
         await user.send(
-            "You have been banned from Decimated.\n\n"
-            "Appeal here:\n"
-            "https://discord.gg/aKyWGZsrj"
+            "You have been banned from Decimated.\n"
+            "Appeal here: https://discord.gg/aKyWGZsrj"
         )
-        print(f"DM sent to {user}")
     except Exception as e:
-        print(f"Could not DM {user}: {e}")
+        print(e)
 
 bot.run(TOKEN)
