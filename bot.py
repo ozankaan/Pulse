@@ -21,7 +21,7 @@ async def on_member_ban(guild, user):
         await user.send(
             "You have been banned from Decimated.\n\n"
             "Appeal here:\n"
-            "https://discord.gg/APPEALSUNUCUN"
+            "https://discord.gg/aKyWGZsrj"
         )
         print(f"DM sent to {user}")
     except Exception as e:
