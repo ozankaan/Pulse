@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 from collections import defaultdict
+import json
 import os
 
 TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
@@ -15,8 +16,28 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="?", intents=intents)
 
-# warnings[guild_id][user_id] = [{"reason": ..., "mod": ...}, ...]
-warnings = defaultdict(lambda: defaultdict(list))
+WARNINGS_FILE = "warnings.json"
+
+
+def load_warnings():
+    if os.path.exists(WARNINGS_FILE):
+        with open(WARNINGS_FILE, "r") as f:
+            data = json.load(f)
+        # Convert to defaultdict structure
+        result = defaultdict(lambda: defaultdict(list))
+        for guild_id, users in data.items():
+            for user_id, warns in users.items():
+                result[guild_id][user_id] = warns
+        return result
+    return defaultdict(lambda: defaultdict(list))
+
+
+def save_warnings(warnings):
+    with open(WARNINGS_FILE, "w") as f:
+        json.dump({g: dict(u) for g, u in warnings.items()}, f, indent=2)
+
+
+warnings = load_warnings()
 
 
 # ── Ban ────────────────────────────────────────────────────────────────────────
@@ -49,13 +70,16 @@ async def ban(ctx, member: discord.Member, *, reason: str = "No reason provided.
 @commands.has_permissions(manage_messages=True)
 async def warn(ctx, member: discord.Member, *, reason: str = "No reason provided."):
     """?warn @user [reason]"""
-    warnings[ctx.guild.id][member.id].append({
+    guild_id = str(ctx.guild.id)
+    user_id = str(member.id)
+
+    warnings[guild_id][user_id].append({
         "reason": reason,
         "mod": str(ctx.author)
     })
-    count = len(warnings[ctx.guild.id][member.id])
+    save_warnings(warnings)
+    count = len(warnings[guild_id][user_id])
 
-    # DM the warned user
     try:
         await member.send(
             f"⚠️ You have been warned in **{ctx.guild.name}**.\n"
@@ -74,7 +98,9 @@ async def warn(ctx, member: discord.Member, *, reason: str = "No reason provided
 @commands.has_permissions(manage_messages=True)
 async def warnings(ctx, member: discord.Member):
     """?warnings @user — list a user's warnings"""
-    user_warns = warnings[ctx.guild.id][member.id]
+    guild_id = str(ctx.guild.id)
+    user_id = str(member.id)
+    user_warns = warnings[guild_id][user_id]
 
     if not user_warns:
         await ctx.send(f"✅ **{member}** has no warnings.")
@@ -97,7 +123,11 @@ async def warnings(ctx, member: discord.Member):
 @commands.has_permissions(manage_messages=True)
 async def clearwarns(ctx, member: discord.Member):
     """?clearwarns @user — clear all warnings"""
-    warnings[ctx.guild.id][member.id].clear()
+    guild_id = str(ctx.guild.id)
+    user_id = str(member.id)
+
+    warnings[guild_id][user_id].clear()
+    save_warnings(warnings)
     await ctx.send(f"✅ Cleared all warnings for **{member}**.")
     print(f"Cleared warnings for {member}")
 
