@@ -11,7 +11,7 @@ intents = discord.Intents.default()
 intents.members = True
 intents.bans = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="?", intents=intents)
 
 
 @bot.command()
