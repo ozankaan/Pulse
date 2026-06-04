@@ -35,9 +35,9 @@ def load_warnings():
     return defaultdict(lambda: defaultdict(list))
 
 
-def save_warnings(warnings):
+def save_warnings(data):
     with open(WARNINGS_FILE, "w") as f:
-        json.dump({g: dict(u) for g, u in warnings.items()}, f, indent=2)
+        json.dump({g: dict(u) for g, u in data.items()}, f, indent=2)
 
 
 def load_config():
@@ -47,12 +47,12 @@ def load_config():
     return {}
 
 
-def save_config(config):
+def save_config(cfg):
     with open(CONFIG_FILE, "w") as f:
-        json.dump(config, f, indent=2)
+        json.dump(cfg, f, indent=2)
 
 
-warnings = load_warnings()
+warn_data = load_warnings()
 config = load_config()
 
 
@@ -122,12 +122,12 @@ async def warn(ctx, member: discord.Member, *, reason: str = "No reason provided
     guild_id = str(ctx.guild.id)
     user_id = str(member.id)
 
-    warnings[guild_id][user_id].append({
+    warn_data[guild_id][user_id].append({
         "reason": reason,
         "mod": str(ctx.author)
     })
-    save_warnings(warnings)
-    count = len(warnings[guild_id][user_id])
+    save_warnings(warn_data)
+    count = len(warn_data[guild_id][user_id])
 
     try:
         await member.send(
@@ -157,7 +157,7 @@ async def warnings(ctx, member: discord.Member):
     """?warnings @user — list a user's warnings"""
     guild_id = str(ctx.guild.id)
     user_id = str(member.id)
-    user_warns = warnings[guild_id][user_id]
+    user_warns = warn_data[guild_id][user_id]
 
     if not user_warns:
         await ctx.send(f"✅ **{member}** has no warnings.")
@@ -180,8 +180,8 @@ async def clearwarns(ctx, member: discord.Member):
     guild_id = str(ctx.guild.id)
     user_id = str(member.id)
 
-    warnings[guild_id][user_id].clear()
-    save_warnings(warnings)
+    warn_data[guild_id][user_id].clear()
+    save_warnings(warn_data)
     await ctx.send(f"✅ Cleared all warnings for **{member}**.")
 
 
