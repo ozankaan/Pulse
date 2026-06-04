@@ -147,6 +147,31 @@ async def warn(ctx, member: discord.Member, *, reason: str = "No reason provided
     embed.add_field(name="DM", value=dm_status, inline=False)
     await send_log(ctx.guild, embed)
 
+    # Auto-ban at 3 warnings
+    if count >= 3:
+        try:
+            await member.send(
+                f"You have been automatically banned from **{ctx.guild.name}** "
+                f"for reaching {count} warnings.\n\n"
+                "If you believe this was a mistake, you can appeal here:\n"
+                "https://discord.gg/aKyWGZsrj"
+            )
+            ban_dm_status = "DM sent."
+        except discord.Forbidden:
+            ban_dm_status = "Could not send DM (DMs disabled or bot blocked)."
+        except Exception as e:
+            ban_dm_status = f"DM error: {e}"
+
+        await ctx.guild.ban(member, reason=f"Auto-ban: reached {count} warnings.", delete_message_days=0)
+        await ctx.send(f"🔨 **{member}** has been automatically banned for reaching {count} warnings. {ban_dm_status}")
+
+        ban_embed = discord.Embed(title="🔨 Auto-Ban (Warn Threshold Reached)", color=discord.Color.red(),
+                                  timestamp=datetime.utcnow())
+        ban_embed.add_field(name="User", value=f"{member} (`{member.id}`)", inline=False)
+        ban_embed.add_field(name="Reason", value=f"Reached {count} warnings.", inline=False)
+        ban_embed.add_field(name="DM", value=ban_dm_status, inline=False)
+        await send_log(ctx.guild, ban_embed)
+
 
 @bot.hybrid_command(name="warnings", description="List all warnings for a member.")
 @commands.has_permissions(manage_messages=True)
