@@ -301,8 +301,10 @@ async def on_command_error(ctx, error):
 @bot.event
 async def on_ready():
     for guild in bot.guilds:
-        await bot.tree.sync(guild=guild)
-    print(f"Bot is online as {bot.user} — slash commands synced to {len(bot.guilds)} guild(s).")
+        bot.tree.copy_global_to(guild=guild)
+        synced = await bot.tree.sync(guild=guild)
+        print(f"Synced {len(synced)} commands to {guild.name}")
+    print(f"Bot is online as {bot.user}")
 
 
 bot.run(TOKEN)
