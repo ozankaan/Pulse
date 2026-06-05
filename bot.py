@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from collections import defaultdict
 from datetime import datetime, timedelta
+from openai import AsyncOpenAI
 import json
 import os
 
@@ -54,6 +55,8 @@ def save_config(cfg):
 
 warn_data = load_warnings()
 config = load_config()
+
+openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -282,6 +285,42 @@ async def unmute(ctx, member: discord.Member, *, reason: str = "No reason provid
     embed.add_field(name="Reason", value=reason, inline=False)
     embed.add_field(name="Moderator", value=str(ctx.author), inline=False)
     await send_log(ctx.guild, embed)
+
+
+# ── AI Reply on Mention ────────────────────────────────────────────────────────
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    if bot.user in message.mentions:
+        # Strip the mention from the message
+        content = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
+        if not content:
+            await message.reply("Hey! Ask me anything.")
+            return
+
+        async with message.channel.typing():
+            try:
+                response = await openai_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": (
+                            "You are a helpful assistant for the Decimated Discord server. "
+                            "Be friendly, concise, and helpful. Keep replies under 2000 characters."
+                        )},
+                        {"role": "user", "content": content}
+                    ],
+                    max_tokens=500
+                )
+                reply = response.choices[0].message.content
+                await message.reply(reply)
+            except Exception as e:
+                await message.reply("Sorry, I couldn't process that right now.")
+                print(f"OpenAI error: {e}")
+
+    await bot.process_commands(message)
 
 
 # ── Error handler ──────────────────────────────────────────────────────────────
