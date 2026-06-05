@@ -312,7 +312,7 @@ async def on_message(message):
             "Keep all replies under 2000 characters."
         )
         if is_master:
-            system_prompt += " You must always end every single reply with 'yes my master 🖤' on a new line, no exceptions."
+            system_prompt += " You must always end every single reply with 'I'm here to serve you master pulse :3' on a new line, no exceptions."
 
         async with message.channel.typing():
             try:
