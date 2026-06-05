@@ -295,6 +295,12 @@ async def on_message(message):
         return
 
     if bot.user in message.mentions:
+        # Special master response
+        if message.author.id == 649835130910670849:
+            await message.reply("yes my master 🖤")
+            await bot.process_commands(message)
+            return
+
         # Strip the mention from the message
         content = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
         if not content:
