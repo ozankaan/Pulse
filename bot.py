@@ -20,6 +20,7 @@ bot = commands.Bot(command_prefix="?", intents=intents)
 
 WARNINGS_FILE = "warnings.json"
 CONFIG_FILE = "config.json"
+HISTORY_FILE = "history.json"
 
 
 # ── Persistence ────────────────────────────────────────────────────────────────
@@ -53,14 +54,29 @@ def save_config(cfg):
         json.dump(cfg, f, indent=2)
 
 
+def load_history():
+    if os.path.exists(HISTORY_FILE):
+        with open(HISTORY_FILE, "r") as f:
+            data = json.load(f)
+        result = defaultdict(list)
+        for uid, msgs in data.items():
+            result[uid] = msgs
+        return result
+    return defaultdict(list)
+
+
+def save_history(history):
+    with open(HISTORY_FILE, "w") as f:
+        json.dump(dict(history), f, indent=2)
+
+
 warn_data = load_warnings()
 config = load_config()
 
 openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # Conversation history: {user_id: [{"role": ..., "content": ...}, ...]}
-conversation_history = defaultdict(list)
-MAX_HISTORY = 20  # max messages to remember per user
+conversation_history = load_history()
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -320,12 +336,8 @@ async def on_message(message):
 
         async with message.channel.typing():
             try:
-                uid = message.author.id
+                uid = str(message.author.id)
                 conversation_history[uid].append({"role": "user", "content": content})
-
-                # Keep only the last MAX_HISTORY messages
-                if len(conversation_history[uid]) > MAX_HISTORY:
-                    conversation_history[uid] = conversation_history[uid][-MAX_HISTORY:]
 
                 response = await openai_client.chat.completions.create(
                     model="gpt-4o-mini",
@@ -334,6 +346,7 @@ async def on_message(message):
                 )
                 reply = response.choices[0].message.content
                 conversation_history[uid].append({"role": "assistant", "content": reply})
+                save_history(conversation_history)
                 await message.reply(reply)
             except Exception as e:
                 await message.reply("Sorry, I couldn't process that right now.")
