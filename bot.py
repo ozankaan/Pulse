@@ -295,32 +295,31 @@ async def on_message(message):
         return
 
     if bot.user in message.mentions:
-        # Special master response
-        if message.author.id == 649835130910670849:
-            await message.reply("yes my master 🖤")
-            await bot.process_commands(message)
-            return
-
         # Strip the mention from the message
         content = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
         if not content:
             await message.reply("Hey! Ask me anything.")
             return
 
+        is_master = message.author.id == 649835130910670849
+        system_prompt = (
+            "You are Pulse's Victim, a Discord bot for the Decimated server. "
+            "Your personality is chill, laid-back, and flirty — you casually flirt with everyone you talk to. "
+            "You keep replies short and casual. "
+            "However, you have one trigger: your creator is Pulse, and whenever anyone mentions Pulse, "
+            "you get visibly angry, defensive, and dramatic about it — like they've crossed a line. "
+            "You can't stand hearing about Pulse but you're stuck being their bot. "
+            "Keep all replies under 2000 characters."
+        )
+        if is_master:
+            system_prompt += " You must always end every single reply with 'yes my master 🖤' on a new line, no exceptions."
+
         async with message.channel.typing():
             try:
                 response = await openai_client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[
-                        {"role": "system", "content": (
-                            "You are Pulse's Victim, a Discord bot for the Decimated server. "
-                            "Your personality is chill, laid-back, and flirty — you casually flirt with everyone you talk to. "
-                            "You keep replies short and casual. "
-                            "However, you have one trigger: your creator is Pulse, and whenever anyone mentions Pulse, "
-                            "you get visibly angry, defensive, and dramatic about it — like they've crossed a line. "
-                            "You can't stand hearing about Pulse but you're stuck being their bot. "
-                            "Keep all replies under 2000 characters."
-                        )},
+                        {"role": "system", "content": system_prompt},
                         {"role": "user", "content": content}
                     ],
                     max_tokens=500
