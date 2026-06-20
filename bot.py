@@ -134,6 +134,33 @@ async def ban(ctx, member: discord.Member, *, reason: str = "No reason provided.
     await send_log(ctx.guild, embed)
 
 
+# ── Unban ──────────────────────────────────────────────────────────────────────
+
+@bot.hybrid_command(name="unban", description="Unban a user by their ID.")
+@commands.has_permissions(ban_members=True)
+async def unban(ctx, user_id: int, *, reason: str = "No reason provided."):
+    try:
+        user = await bot.fetch_user(user_id)
+    except discord.NotFound:
+        await ctx.send("❌ No user found with that ID.")
+        return
+
+    try:
+        await ctx.guild.unban(user, reason=reason)
+    except discord.NotFound:
+        await ctx.send(f"❌ **{user}** is not banned.")
+        return
+
+    await ctx.send(f"✅ **{user}** has been unbanned.")
+
+    embed = discord.Embed(title="🔓 Member Unbanned", color=discord.Color.green(),
+                          timestamp=datetime.utcnow())
+    embed.add_field(name="User", value=f"{user} (`{user.id}`)", inline=False)
+    embed.add_field(name="Reason", value=reason, inline=False)
+    embed.add_field(name="Moderator", value=str(ctx.author), inline=False)
+    await send_log(ctx.guild, embed)
+
+
 # ── Warn ───────────────────────────────────────────────────────────────────────
 
 @bot.hybrid_command(name="warn", description="Warn a member and notify them via DM.")
