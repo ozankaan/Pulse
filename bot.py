@@ -310,20 +310,20 @@ AD_PATTERN = re.compile(r'discord(?:\.gg|(?:app)?\.com/invite)/(\S+)', re.IGNORE
 def is_owner(ctx):
     return ctx.author.id == 649835130910670849
 
-@bot.command(name="aiturn")
+@bot.hybrid_command(name="aiturn", description="Enable AI replies in this server.")
 @commands.check(is_owner)
 async def aiturn(ctx):
     ai_enabled_guilds.add(ctx.guild.id)
     await ctx.send("✅ AI replies are now **ON**.")
 
-@bot.command(name="aioff")
+@bot.hybrid_command(name="aioff", description="Disable AI replies in this server.")
 @commands.check(is_owner)
 async def aioff(ctx):
     ai_enabled_guilds.discard(ctx.guild.id)
     await ctx.send("🔇 AI replies are now **OFF**.")
 
 
-@bot.command(name="chaos")
+@bot.hybrid_command(name="chaos", description="Toggle chaos mode — bot fires back when insulted.")
 @commands.check(is_owner)
 async def chaos(ctx):
     guild_id = ctx.guild.id
@@ -335,7 +335,7 @@ async def chaos(ctx):
         await ctx.send("😈 **Chaos mode ON.** Try me.")
 
 
-@bot.command(name="nukeprot")
+@bot.hybrid_command(name="nukeprot", description="Toggle nuke protection for this server.")
 @commands.check(is_owner)
 async def nukeprot(ctx):
     if ctx.guild.id in nukeprot_guilds:
@@ -346,7 +346,7 @@ async def nukeprot(ctx):
         await ctx.send("🛡️ **Nuke protection ON.** Mass actions will be stopped automatically.")
 
 
-@bot.command(name="antiad")
+@bot.hybrid_command(name="antiad", description="Toggle anti-advertisement protection for this server.")
 @commands.has_permissions(manage_messages=True)
 async def antiad(ctx):
     if ctx.guild.id in antiad_guilds:
