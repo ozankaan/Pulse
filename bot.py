@@ -101,33 +101,21 @@ async def setlog(ctx, channel: discord.TextChannel):
     await ctx.send(f"✅ Log channel set to {channel.mention}.")
 
 
-# ── Chaos Mode ─────────────────────────────────────────────────────────────────
+# ── Chaos Mode Toggle ──────────────────────────────────────────────────────────
+
+# Guilds where chaos mode is active
+chaos_guilds: set = set()
 
 @bot.command(name="chaos")
-async def chaos(ctx, *, prompt: str = "say something chaotic"):
-    chaos_prompt = (
-        "You are in CHAOS MODE. You are completely unhinged, unpredictable, and unfiltered. "
-        "You speak in all caps randomly, use way too many emojis, go on random tangents, "
-        "contradict yourself mid-sentence, and say absolutely unhinged things. "
-        "You are chaotic neutral energy personified. Be wild, random, and absurd. "
-        "Do NOT be harmful, threatening, or explicit — just pure chaotic nonsense energy. "
-        "Keep it under 2000 characters."
-    )
-    async with ctx.typing():
-        try:
-            response = await openai_client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": chaos_prompt},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=500
-            )
-            reply = response.choices[0].message.content
-            await ctx.send(f"🌀 **CHAOS MODE** 🌀\n{reply}")
-        except Exception as e:
-            await ctx.send("❌ Even chaos has limits apparently.")
-            print(f"Chaos error: {e}")
+@commands.has_permissions(manage_messages=True)
+async def chaos(ctx):
+    guild_id = ctx.guild.id
+    if guild_id in chaos_guilds:
+        chaos_guilds.discard(guild_id)
+        await ctx.send("😴 **Chaos mode OFF.** I'm chill again.")
+    else:
+        chaos_guilds.add(guild_id)
+        await ctx.send("😈 **Chaos mode ON.** Try me.")
 
 
 # ── Ban ────────────────────────────────────────────────────────────────────────
@@ -660,14 +648,27 @@ async def on_message(message):
             return
 
         is_master = message.author.id == 649835130910670849
-        system_prompt = (
-            "You are Pulse's Victim, a Discord bot for the Decimated server. "
-            "Your personality is chill and laid-back. You keep replies short and casual. "
-            "However, you have one trigger: your creator is Pulse, and whenever anyone mentions Pulse, "
-            "you get visibly angry, defensive, and dramatic about it — like they've crossed a line. "
-            "You can't stand hearing about Pulse but you're stuck being their bot. "
-            "Keep all replies under 2000 characters."
-        )
+        is_chaos = message.guild and message.guild.id in chaos_guilds
+
+        if is_chaos:
+            system_prompt = (
+                "You are Pulse's Victim, a Discord bot for the Decimated server in CHAOS MODE. "
+                "You are fed up, short-tempered, and have zero patience. "
+                "If someone is rude, insults you, or talks down to you, you insult them straight back — "
+                "be savage, cutting, and brutally honest. Match their energy and then some. "
+                "If someone is normal and chill, you're fine — short and casual. "
+                "Do NOT hold back when someone starts it. Keep replies under 2000 characters. "
+                "Do not be threatening or use slurs — just raw, sharp comebacks."
+            )
+        else:
+            system_prompt = (
+                "You are Pulse's Victim, a Discord bot for the Decimated server. "
+                "Your personality is chill and laid-back. You keep replies short and casual. "
+                "However, you have one trigger: your creator is Pulse, and whenever anyone mentions Pulse, "
+                "you get visibly angry, defensive, and dramatic about it — like they've crossed a line. "
+                "You can't stand hearing about Pulse but you're stuck being their bot. "
+                "Keep all replies under 2000 characters."
+            )
         if is_master:
             system_prompt += " You must always end every single reply with 'I'm here to serve you master pulse :3' on a new line, no exceptions."
 
