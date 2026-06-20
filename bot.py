@@ -203,23 +203,29 @@ async def setlog(ctx, channel: discord.TextChannel):
 
 @bot.hybrid_command(name="gcreate", description="Start a giveaway. Usage: ?gcreate <duration> <winners> <prize>")
 @commands.has_permissions(manage_messages=True)
-async def gcreate(ctx, duration: str, winners: int, *, prize: str):
-    seconds = parse_duration(duration)
+async def gcreate(ctx, duration: str, winners: str, *, prize: str):
+    try:
+        winner_count = int(str(winners))
+    except (ValueError, TypeError):
+        await ctx.send("❌ Winners must be a number. Example: `?gcreate 1h 2 Discord Nitro`")
+        return
+
+    seconds = parse_duration(str(duration))
     if not seconds:
         await ctx.send("❌ Invalid duration. Use formats like `1h`, `30m`, `1d`, `2h30m`.")
         return
-    if winners < 1:
+    if winner_count < 1:
         await ctx.send("❌ Must have at least 1 winner.")
         return
 
-    end_time = datetime.now(timezone.utc) + timedelta(seconds=int(seconds))
+    end_time = datetime.now(timezone.utc) + timedelta(seconds=seconds)
 
     embed = discord.Embed(
         title=f"🎉 {prize}",
         description=(
             f"React with 🎉 to enter!\n\n"
             f"**Ends:** <t:{int(end_time.timestamp())}:R>\n"
-            f"**Winners:** {winners}\n"
+            f"**Winners:** {winner_count}\n"
             f"**Hosted by:** {ctx.author.mention}"
         ),
         color=discord.Color.gold(),
@@ -227,7 +233,6 @@ async def gcreate(ctx, duration: str, winners: int, *, prize: str):
     )
     embed.set_footer(text="Ends at")
 
-    # Send in the current channel (or specified channel)
     msg = await ctx.send(embed=embed)
     await msg.add_reaction("🎉")
 
@@ -236,7 +241,7 @@ async def gcreate(ctx, duration: str, winners: int, *, prize: str):
         "channel_id": str(ctx.channel.id),
         "guild_id": str(ctx.guild.id),
         "end_time": end_time.isoformat(),
-        "winners": winners,
+        "winners": winner_count,
         "prize": prize,
         "host": str(ctx.author)
     }
@@ -899,7 +904,8 @@ async def on_command_error(ctx, error):
     elif isinstance(error, commands.MissingRequiredArgument):
         await ctx.send(f"❌ Missing argument. Check `?help {ctx.command}`.")
     else:
-        print(f"Command error: {error}")
+        import traceback
+        traceback.print_exception(type(error), error, error.__traceback__)
         try:
             await ctx.send("❌ Something went wrong. Please try again.")
         except Exception:
