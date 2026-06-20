@@ -106,6 +106,22 @@ async def setlog(ctx, channel: discord.TextChannel):
 # Guilds where chaos mode is active
 chaos_guilds: set = set()
 
+# Guilds where AI replies are disabled
+ai_disabled_guilds: set = set()
+
+@bot.command(name="aiturn")
+@commands.has_permissions(manage_messages=True)
+async def aiturn(ctx):
+    ai_disabled_guilds.discard(ctx.guild.id)
+    await ctx.send("✅ AI replies are now **ON**.")
+
+@bot.command(name="aioff")
+@commands.has_permissions(manage_messages=True)
+async def aioff(ctx):
+    ai_disabled_guilds.add(ctx.guild.id)
+    await ctx.send("🔇 AI replies are now **OFF**.")
+
+
 @bot.command(name="chaos")
 @commands.has_permissions(manage_messages=True)
 async def chaos(ctx):
@@ -640,7 +656,7 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    if bot.user in message.mentions:
+    if bot.user in message.mentions and message.guild.id not in ai_disabled_guilds:
         # Strip the mention from the message
         content = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
         if not content:
