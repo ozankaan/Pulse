@@ -244,6 +244,45 @@ async def warnings(ctx, member: discord.Member):
     await ctx.send(embed=embed)
 
 
+@bot.hybrid_command(name="allwarns", description="Show all warnings for every member in the server.")
+@commands.has_permissions(manage_messages=True)
+async def allwarns(ctx):
+    guild_id = str(ctx.guild.id)
+    guild_warns = warn_data.get(guild_id, {})
+
+    # Filter to members who actually have warnings
+    entries = {uid: warns for uid, warns in guild_warns.items() if warns}
+
+    if not entries:
+        await ctx.send("✅ No members have any warnings in this server.")
+        return
+
+    # Build pages of up to 10 members per embed to avoid hitting field limits
+    lines = []
+    for uid, warns in entries.items():
+        member = ctx.guild.get_member(int(uid))
+        name = str(member) if member else f"Unknown User (`{uid}`)"
+        for i, w in enumerate(warns, 1):
+            lines.append((name, i, w["reason"], w["mod"]))
+
+    # Split into embeds of 25 fields max (Discord limit)
+    CHUNK = 25
+    pages = [lines[i:i + CHUNK] for i in range(0, len(lines), CHUNK)]
+
+    for page_num, chunk in enumerate(pages, 1):
+        embed = discord.Embed(
+            title=f"⚠️ All Server Warnings (Page {page_num}/{len(pages)})",
+            color=discord.Color.orange()
+        )
+        for name, i, reason, mod in chunk:
+            embed.add_field(
+                name=f"{name} — Warning {i}",
+                value=f"**Reason:** {reason}\n**By:** {mod}",
+                inline=False
+            )
+        await ctx.send(embed=embed)
+
+
 @bot.hybrid_command(name="removewarn", description="Remove a specific warning from a member by its number.")
 @commands.has_permissions(manage_messages=True)
 async def removewarn(ctx, member: discord.Member, index: int):
