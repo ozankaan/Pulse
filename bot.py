@@ -8,6 +8,7 @@ import os
 import asyncio
 import random
 import re
+import time
 
 TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
 
@@ -292,6 +293,20 @@ chaos_guilds: set = set()
 # Guilds where AI replies are enabled (off by default everywhere)
 ai_enabled_guilds: set = set()
 
+# Guilds where nuke protection is enabled
+nukeprot_guilds: set = set()
+
+# Guilds where anti-ad is enabled
+antiad_guilds: set = set()
+
+# Nuke action tracker: {(guild_id, user_id): [timestamps]}
+nuke_tracker: dict = defaultdict(list)
+NUKE_THRESHOLD = 5   # actions
+NUKE_WINDOW = 10     # seconds
+
+# Discord invite pattern (other servers only)
+AD_PATTERN = re.compile(r'discord(?:\.gg|(?:app)?\.com/invite)/(\S+)', re.IGNORECASE)
+
 def is_owner(ctx):
     return ctx.author.id == 649835130910670849
 
@@ -318,6 +333,28 @@ async def chaos(ctx):
     else:
         chaos_guilds.add(guild_id)
         await ctx.send("😈 **Chaos mode ON.** Try me.")
+
+
+@bot.command(name="nukeprot")
+@commands.check(is_owner)
+async def nukeprot(ctx):
+    if ctx.guild.id in nukeprot_guilds:
+        nukeprot_guilds.discard(ctx.guild.id)
+        await ctx.send("🛡️ **Nuke protection OFF.**")
+    else:
+        nukeprot_guilds.add(ctx.guild.id)
+        await ctx.send("🛡️ **Nuke protection ON.** Mass actions will be stopped automatically.")
+
+
+@bot.command(name="antiad")
+@commands.has_permissions(manage_messages=True)
+async def antiad(ctx):
+    if ctx.guild.id in antiad_guilds:
+        antiad_guilds.discard(ctx.guild.id)
+        await ctx.send("📢 **Anti-ad OFF.**")
+    else:
+        antiad_guilds.add(ctx.guild.id)
+        await ctx.send("📢 **Anti-ad ON.** Discord invite links from other servers will be deleted.")
 
 
 # ── Ban ────────────────────────────────────────────────────────────────────────
@@ -580,6 +617,52 @@ async def unmute(ctx, member: discord.Member, *, reason: str = "No reason provid
     await send_log(ctx.guild, embed)
 
 
+# ── Nuke Protection Helper ─────────────────────────────────────────────────────
+
+async def check_nuke(guild, action_label: str):
+    """Fetch the latest audit log entry, track actions, and punish if threshold hit."""
+    if guild.id not in nukeprot_guilds:
+        return
+    try:
+        entries = [entry async for entry in guild.audit_logs(limit=1)]
+    except discord.Forbidden:
+        return
+    if not entries:
+        return
+    entry = entries[0]
+    if entry.user is None or entry.user.bot:
+        return
+
+    key = (guild.id, entry.user.id)
+    now = time.time()
+    nuke_tracker[key] = [t for t in nuke_tracker[key] if now - t < NUKE_WINDOW]
+    nuke_tracker[key].append(now)
+
+    if len(nuke_tracker[key]) >= NUKE_THRESHOLD:
+        nuke_tracker[key].clear()
+        perpetrator = entry.user
+        member = guild.get_member(perpetrator.id)
+        if member:
+            try:
+                await member.edit(roles=[], reason="Nuke protection: mass destructive actions detected.")
+            except Exception:
+                pass
+            try:
+                await member.kick(reason="Nuke protection: mass destructive actions detected.")
+            except Exception:
+                pass
+
+        embed = discord.Embed(
+            title="🚨 NUKE PROTECTION TRIGGERED",
+            color=discord.Color.dark_red(),
+            timestamp=datetime.now(timezone.utc)
+        )
+        embed.add_field(name="Perpetrator", value=f"{perpetrator} (`{perpetrator.id}`)", inline=False)
+        embed.add_field(name="Action", value=action_label, inline=False)
+        embed.add_field(name="Response", value="Roles stripped & user kicked.", inline=False)
+        await send_log(guild, embed)
+
+
 # ── Audit Log Events ───────────────────────────────────────────────────────────
 
 @bot.event
@@ -659,6 +742,7 @@ async def on_guild_channel_delete(channel):
     if hasattr(channel, "category") and channel.category:
         embed.add_field(name="Category", value=channel.category.name, inline=True)
     await send_log(channel.guild, embed)
+    await check_nuke(channel.guild, f"Channel deleted: #{channel.name}")
 
 
 @bot.event
@@ -713,6 +797,7 @@ async def on_guild_role_delete(role):
     embed.add_field(name="Role", value=f"@{role.name} (`{role.id}`)", inline=False)
     embed.add_field(name="Color", value=str(role.color), inline=True)
     await send_log(role.guild, embed)
+    await check_nuke(role.guild, f"Role deleted: @{role.name}")
 
 
 @bot.event
@@ -767,6 +852,11 @@ async def on_guild_update(before, after):
     for name, old_val, new_val in changes:
         embed.add_field(name=name, value=f"{old_val} → {new_val}", inline=False)
     await send_log(after, embed)
+
+
+@bot.event
+async def on_member_ban(guild, user):
+    await check_nuke(guild, f"Member banned: {user}")
 
 
 @bot.event
@@ -832,6 +922,36 @@ async def on_message_edit(before, after):
 async def on_message(message):
     if message.author.bot:
         return
+
+    # ── Anti-ad check ──────────────────────────────────────────────────────────
+    if (
+        message.guild
+        and message.guild.id in antiad_guilds
+        and not message.author.guild_permissions.manage_messages
+    ):
+        match = AD_PATTERN.search(message.content)
+        if match:
+            invite_code = match.group(1).rstrip(".,!?")
+            try:
+                invite = await bot.fetch_invite(invite_code)
+                # Only delete if it's a different server
+                if invite.guild and invite.guild.id != message.guild.id:
+                    await message.delete()
+                    warn_msg = await message.channel.send(
+                        f"🚫 {message.author.mention} Advertising other servers is not allowed here."
+                    )
+                    await asyncio.sleep(5)
+                    await warn_msg.delete()
+            except discord.NotFound:
+                # Invalid/expired invite — delete it anyway
+                await message.delete()
+                warn_msg = await message.channel.send(
+                    f"🚫 {message.author.mention} Advertising other servers is not allowed here."
+                )
+                await asyncio.sleep(5)
+                await warn_msg.delete()
+            except Exception:
+                pass
 
     if bot.user in message.mentions and message.guild and message.guild.id in ai_enabled_guilds:
         # Strip the mention from the message
