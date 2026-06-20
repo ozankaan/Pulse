@@ -101,6 +101,35 @@ async def setlog(ctx, channel: discord.TextChannel):
     await ctx.send(f"✅ Log channel set to {channel.mention}.")
 
 
+# ── Chaos Mode ─────────────────────────────────────────────────────────────────
+
+@bot.command(name="chaos")
+async def chaos(ctx, *, prompt: str = "say something chaotic"):
+    chaos_prompt = (
+        "You are in CHAOS MODE. You are completely unhinged, unpredictable, and unfiltered. "
+        "You speak in all caps randomly, use way too many emojis, go on random tangents, "
+        "contradict yourself mid-sentence, and say absolutely unhinged things. "
+        "You are chaotic neutral energy personified. Be wild, random, and absurd. "
+        "Do NOT be harmful, threatening, or explicit — just pure chaotic nonsense energy. "
+        "Keep it under 2000 characters."
+    )
+    async with ctx.typing():
+        try:
+            response = await openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": chaos_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=500
+            )
+            reply = response.choices[0].message.content
+            await ctx.send(f"🌀 **CHAOS MODE** 🌀\n{reply}")
+        except Exception as e:
+            await ctx.send("❌ Even chaos has limits apparently.")
+            print(f"Chaos error: {e}")
+
+
 # ── Ban ────────────────────────────────────────────────────────────────────────
 
 @bot.hybrid_command(name="ban", description="Ban a member and send them an appeal link via DM.")
