@@ -532,23 +532,14 @@ async def clearwarns(ctx, member: discord.Member):
 
 # ── Mute ───────────────────────────────────────────────────────────────────────
 
-def parse_duration(duration: str) -> timedelta:
-    """Parse duration strings like 10m, 2h, 1d, 30s into a timedelta."""
-    units = {"s": "seconds", "m": "minutes", "h": "hours", "d": "days"}
-    if duration[-1] not in units:
-        raise ValueError("Invalid unit. Use s, m, h, or d (e.g. 10m, 2h, 1d).")
-    amount = int(duration[:-1])
-    return timedelta(**{units[duration[-1]]: amount})
-
-
 @bot.hybrid_command(name="mute", description="Timeout a member for a duration (e.g. 10m, 2h, 1d).")
 @commands.has_permissions(moderate_members=True)
 async def mute(ctx, member: discord.Member, duration: str, *, reason: str = "No reason provided."):
-    try:
-        delta = parse_duration(duration)
-    except ValueError as e:
-        await ctx.send(f"❌ {e}")
+    secs = parse_duration(str(duration))
+    if not secs:
+        await ctx.send("❌ Invalid duration. Use formats like `10m`, `2h`, `1d`.")
         return
+    delta = timedelta(seconds=secs)
 
     until = discord.utils.utcnow() + delta
 
