@@ -106,8 +106,8 @@ async def setlog(ctx, channel: discord.TextChannel):
 # Guilds where chaos mode is active
 chaos_guilds: set = set()
 
-# Guilds where AI replies are disabled
-ai_disabled_guilds: set = set()
+# Guilds where AI replies are enabled (off by default everywhere)
+ai_enabled_guilds: set = set()
 
 def is_owner(ctx):
     return ctx.author.id == 649835130910670849
@@ -115,13 +115,13 @@ def is_owner(ctx):
 @bot.command(name="aiturn")
 @commands.check(is_owner)
 async def aiturn(ctx):
-    ai_disabled_guilds.discard(ctx.guild.id)
+    ai_enabled_guilds.add(ctx.guild.id)
     await ctx.send("✅ AI replies are now **ON**.")
 
 @bot.command(name="aioff")
 @commands.check(is_owner)
 async def aioff(ctx):
-    ai_disabled_guilds.add(ctx.guild.id)
+    ai_enabled_guilds.discard(ctx.guild.id)
     await ctx.send("🔇 AI replies are now **OFF**.")
 
 
@@ -659,7 +659,7 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    if bot.user in message.mentions and message.guild.id not in ai_disabled_guilds:
+    if bot.user in message.mentions and message.guild and message.guild.id in ai_enabled_guilds:
         # Strip the mention from the message
         content = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
         if not content:
