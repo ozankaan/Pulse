@@ -109,21 +109,24 @@ chaos_guilds: set = set()
 # Guilds where AI replies are disabled
 ai_disabled_guilds: set = set()
 
+def is_owner(ctx):
+    return ctx.author.id == 649835130910670849
+
 @bot.command(name="aiturn")
-@commands.has_permissions(manage_messages=True)
+@commands.check(is_owner)
 async def aiturn(ctx):
     ai_disabled_guilds.discard(ctx.guild.id)
     await ctx.send("✅ AI replies are now **ON**.")
 
 @bot.command(name="aioff")
-@commands.has_permissions(manage_messages=True)
+@commands.check(is_owner)
 async def aioff(ctx):
     ai_disabled_guilds.add(ctx.guild.id)
     await ctx.send("🔇 AI replies are now **OFF**.")
 
 
 @bot.command(name="chaos")
-@commands.has_permissions(manage_messages=True)
+@commands.check(is_owner)
 async def chaos(ctx):
     guild_id = ctx.guild.id
     if guild_id in chaos_guilds:
