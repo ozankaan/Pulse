@@ -97,12 +97,23 @@ openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def parse_duration(s: str):
-    """Parse '1d2h30m' style strings into total seconds. Returns None if invalid."""
-    matches = re.findall(r'(\d+)([dhms])', s.lower())
-    if not matches:
-        return None
-    units = {'d': 86400, 'h': 3600, 'm': 60, 's': 1}
-    total = sum(int(v) * units[u] for v, u in matches)
+    """Parse '1d2h30m' style strings into total seconds (int). Returns None if invalid."""
+    total = 0
+    current = ""
+    for char in str(s).lower():
+        if char.isdigit():
+            current += char
+        elif char in ('d', 'h', 'm', 's') and current:
+            n = int(current)
+            if char == 'd':
+                total += n * 86400
+            elif char == 'h':
+                total += n * 3600
+            elif char == 'm':
+                total += n * 60
+            elif char == 's':
+                total += n
+            current = ""
     return total if total > 0 else None
 
 
