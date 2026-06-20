@@ -201,7 +201,7 @@ async def gcreate(ctx, duration: str, winners: int, *, prize: str):
         await ctx.send("❌ Must have at least 1 winner.")
         return
 
-    end_time = datetime.now(timezone.utc) + timedelta(seconds=seconds)
+    end_time = datetime.now(timezone.utc) + timedelta(seconds=int(seconds))
 
     embed = discord.Embed(
         title=f"🎉 {prize}",
@@ -889,6 +889,10 @@ async def on_command_error(ctx, error):
         await ctx.send(f"❌ Missing argument. Check `?help {ctx.command}`.")
     else:
         print(f"Command error: {error}")
+        try:
+            await ctx.send("❌ Something went wrong. Please try again.")
+        except Exception:
+            pass
 
 
 @bot.event
