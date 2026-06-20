@@ -75,9 +75,6 @@ config = load_config()
 
 openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-# Conversation history: {user_id: [{"role": ..., "content": ...}, ...]}
-conversation_history = load_history()
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -647,17 +644,15 @@ async def on_message(message):
 
         async with message.channel.typing():
             try:
-                uid = str(message.author.id)
-                conversation_history[uid].append({"role": "user", "content": content})
-
                 response = await openai_client.chat.completions.create(
                     model="gpt-4o-mini",
-                    messages=[{"role": "system", "content": system_prompt}] + conversation_history[uid],
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": content}
+                    ],
                     max_tokens=500
                 )
                 reply = response.choices[0].message.content
-                conversation_history[uid].append({"role": "assistant", "content": reply})
-                save_history(conversation_history)
                 await message.reply(reply)
             except Exception as e:
                 await message.reply("Sorry, I couldn't process that right now.")
