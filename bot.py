@@ -334,6 +334,252 @@ async def unmute(ctx, member: discord.Member, *, reason: str = "No reason provid
     await send_log(ctx.guild, embed)
 
 
+# ── Audit Log Events ───────────────────────────────────────────────────────────
+
+@bot.event
+async def on_member_update(before, after):
+    guild = after.guild
+    changes = []
+
+    # Nickname change
+    if before.nick != after.nick:
+        changes.append(("Nickname", before.nick or "*None*", after.nick or "*None*"))
+
+    # Roles added
+    added = [r for r in after.roles if r not in before.roles]
+    for role in added:
+        changes.append(("Role Added", "—", role.mention))
+
+    # Roles removed
+    removed = [r for r in before.roles if r not in after.roles]
+    for role in removed:
+        changes.append(("Role Removed", role.mention, "—"))
+
+    if not changes:
+        return
+
+    embed = discord.Embed(title="👤 Member Updated", color=discord.Color.blurple(),
+                          timestamp=datetime.utcnow())
+    embed.set_thumbnail(url=after.display_avatar.url)
+    embed.add_field(name="Member", value=f"{after.mention} (`{after.id}`)", inline=False)
+    for name, old_val, new_val in changes:
+        embed.add_field(name=name, value=f"{old_val} → {new_val}", inline=False)
+    await send_log(guild, embed)
+
+
+@bot.event
+async def on_user_update(before, after):
+    changes = []
+    if before.name != after.name:
+        changes.append(("Username", before.name, after.name))
+    if before.discriminator != after.discriminator:
+        changes.append(("Discriminator", f"#{before.discriminator}", f"#{after.discriminator}"))
+    if before.display_avatar != after.display_avatar:
+        changes.append(("Avatar", "Changed", "See new avatar below"))
+
+    if not changes:
+        return
+
+    for guild in bot.guilds:
+        member = guild.get_member(after.id)
+        if not member:
+            continue
+        embed = discord.Embed(title="✏️ User Updated", color=discord.Color.blurple(),
+                              timestamp=datetime.utcnow())
+        embed.set_thumbnail(url=after.display_avatar.url)
+        embed.add_field(name="User", value=f"{after.mention} (`{after.id}`)", inline=False)
+        for name, old_val, new_val in changes:
+            embed.add_field(name=name, value=f"{old_val} → {new_val}", inline=False)
+        await send_log(guild, embed)
+
+
+@bot.event
+async def on_guild_channel_create(channel):
+    embed = discord.Embed(title="📢 Channel Created", color=discord.Color.green(),
+                          timestamp=datetime.utcnow())
+    embed.add_field(name="Channel", value=f"{channel.mention} (`{channel.id}`)", inline=False)
+    embed.add_field(name="Type", value=str(channel.type).replace("_", " ").title(), inline=True)
+    if hasattr(channel, "category") and channel.category:
+        embed.add_field(name="Category", value=channel.category.name, inline=True)
+    await send_log(channel.guild, embed)
+
+
+@bot.event
+async def on_guild_channel_delete(channel):
+    embed = discord.Embed(title="🗑️ Channel Deleted", color=discord.Color.red(),
+                          timestamp=datetime.utcnow())
+    embed.add_field(name="Channel", value=f"#{channel.name} (`{channel.id}`)", inline=False)
+    embed.add_field(name="Type", value=str(channel.type).replace("_", " ").title(), inline=True)
+    if hasattr(channel, "category") and channel.category:
+        embed.add_field(name="Category", value=channel.category.name, inline=True)
+    await send_log(channel.guild, embed)
+
+
+@bot.event
+async def on_guild_channel_update(before, after):
+    changes = []
+    if before.name != after.name:
+        changes.append(("Name", before.name, after.name))
+    if hasattr(before, "topic") and before.topic != after.topic:
+        changes.append(("Topic", before.topic or "*None*", after.topic or "*None*"))
+    if hasattr(before, "slowmode_delay") and before.slowmode_delay != after.slowmode_delay:
+        changes.append(("Slowmode", f"{before.slowmode_delay}s", f"{after.slowmode_delay}s"))
+    if hasattr(before, "nsfw") and before.nsfw != after.nsfw:
+        changes.append(("NSFW", str(before.nsfw), str(after.nsfw)))
+
+    # Permission overwrite changes
+    old_perms = dict(before.overwrites)
+    new_perms = dict(after.overwrites)
+    all_targets = set(old_perms) | set(new_perms)
+    perm_changes = []
+    for target in all_targets:
+        if old_perms.get(target) != new_perms.get(target):
+            perm_changes.append(target.name if hasattr(target, "name") else str(target))
+    if perm_changes:
+        changes.append(("Permission Overwrites Changed", "—", ", ".join(perm_changes)))
+
+    if not changes:
+        return
+
+    embed = discord.Embed(title="🔧 Channel Updated", color=discord.Color.orange(),
+                          timestamp=datetime.utcnow())
+    embed.add_field(name="Channel", value=f"{after.mention} (`{after.id}`)", inline=False)
+    for name, old_val, new_val in changes:
+        embed.add_field(name=name, value=f"{old_val} → {new_val}", inline=False)
+    await send_log(after.guild, embed)
+
+
+@bot.event
+async def on_guild_role_create(role):
+    embed = discord.Embed(title="🎭 Role Created", color=discord.Color.green(),
+                          timestamp=datetime.utcnow())
+    embed.add_field(name="Role", value=f"{role.mention} (`{role.id}`)", inline=False)
+    embed.add_field(name="Color", value=str(role.color), inline=True)
+    embed.add_field(name="Hoisted", value=str(role.hoist), inline=True)
+    embed.add_field(name="Mentionable", value=str(role.mentionable), inline=True)
+    await send_log(role.guild, embed)
+
+
+@bot.event
+async def on_guild_role_delete(role):
+    embed = discord.Embed(title="🗑️ Role Deleted", color=discord.Color.red(),
+                          timestamp=datetime.utcnow())
+    embed.add_field(name="Role", value=f"@{role.name} (`{role.id}`)", inline=False)
+    embed.add_field(name="Color", value=str(role.color), inline=True)
+    await send_log(role.guild, embed)
+
+
+@bot.event
+async def on_guild_role_update(before, after):
+    changes = []
+    if before.name != after.name:
+        changes.append(("Name", before.name, after.name))
+    if before.color != after.color:
+        changes.append(("Color", str(before.color), str(after.color)))
+    if before.hoist != after.hoist:
+        changes.append(("Hoisted", str(before.hoist), str(after.hoist)))
+    if before.mentionable != after.mentionable:
+        changes.append(("Mentionable", str(before.mentionable), str(after.mentionable)))
+    if before.permissions != after.permissions:
+        added_perms = [p for p, v in after.permissions if v and not getattr(before.permissions, p)]
+        removed_perms = [p for p, v in before.permissions if v and not getattr(after.permissions, p)]
+        if added_perms:
+            changes.append(("Permissions Added", "—", ", ".join(added_perms)))
+        if removed_perms:
+            changes.append(("Permissions Removed", ", ".join(removed_perms), "—"))
+
+    if not changes:
+        return
+
+    embed = discord.Embed(title="🔧 Role Updated", color=discord.Color.orange(),
+                          timestamp=datetime.utcnow())
+    embed.add_field(name="Role", value=f"{after.mention} (`{after.id}`)", inline=False)
+    for name, old_val, new_val in changes:
+        embed.add_field(name=name, value=f"{old_val} → {new_val}", inline=False)
+    await send_log(after.guild, embed)
+
+
+@bot.event
+async def on_guild_update(before, after):
+    changes = []
+    if before.name != after.name:
+        changes.append(("Server Name", before.name, after.name))
+    if before.icon != after.icon:
+        changes.append(("Icon", "Changed", "See new icon"))
+    if before.verification_level != after.verification_level:
+        changes.append(("Verification Level", str(before.verification_level), str(after.verification_level)))
+    if before.default_notifications != after.default_notifications:
+        changes.append(("Notifications", str(before.default_notifications), str(after.default_notifications)))
+
+    if not changes:
+        return
+
+    embed = discord.Embed(title="⚙️ Server Updated", color=discord.Color.orange(),
+                          timestamp=datetime.utcnow())
+    if after.icon:
+        embed.set_thumbnail(url=after.icon.url)
+    for name, old_val, new_val in changes:
+        embed.add_field(name=name, value=f"{old_val} → {new_val}", inline=False)
+    await send_log(after, embed)
+
+
+@bot.event
+async def on_member_join(member):
+    embed = discord.Embed(title="📥 Member Joined", color=discord.Color.green(),
+                          timestamp=datetime.utcnow())
+    embed.set_thumbnail(url=member.display_avatar.url)
+    embed.add_field(name="Member", value=f"{member.mention} (`{member.id}`)", inline=False)
+    embed.add_field(name="Account Created", value=f"<t:{int(member.created_at.timestamp())}:R>", inline=False)
+    await send_log(member.guild, embed)
+
+
+@bot.event
+async def on_member_remove(member):
+    embed = discord.Embed(title="📤 Member Left", color=discord.Color.red(),
+                          timestamp=datetime.utcnow())
+    embed.set_thumbnail(url=member.display_avatar.url)
+    embed.add_field(name="Member", value=f"{member} (`{member.id}`)", inline=False)
+    embed.add_field(name="Joined At", value=f"<t:{int(member.joined_at.timestamp())}:R>" if member.joined_at else "Unknown", inline=False)
+    await send_log(member.guild, embed)
+
+
+@bot.event
+async def on_message_delete(message):
+    if message.author.bot:
+        return
+    embed = discord.Embed(title="🗑️ Message Deleted", color=discord.Color.red(),
+                          timestamp=datetime.utcnow())
+    embed.set_thumbnail(url=message.author.display_avatar.url)
+    embed.add_field(name="Author", value=f"{message.author.mention} (`{message.author.id}`)", inline=False)
+    embed.add_field(name="Channel", value=message.channel.mention, inline=True)
+    content = message.content or "*No text content*"
+    if len(content) > 1024:
+        content = content[:1021] + "..."
+    embed.add_field(name="Content", value=content, inline=False)
+    await send_log(message.guild, embed)
+
+
+@bot.event
+async def on_message_edit(before, after):
+    if before.author.bot or before.content == after.content:
+        return
+    embed = discord.Embed(title="✏️ Message Edited", color=discord.Color.yellow(),
+                          timestamp=datetime.utcnow())
+    embed.set_thumbnail(url=after.author.display_avatar.url)
+    embed.add_field(name="Author", value=f"{after.author.mention} (`{after.author.id}`)", inline=False)
+    embed.add_field(name="Channel", value=after.channel.mention, inline=True)
+    old_content = before.content or "*Empty*"
+    new_content = after.content or "*Empty*"
+    if len(old_content) > 512:
+        old_content = old_content[:509] + "..."
+    if len(new_content) > 512:
+        new_content = new_content[:509] + "..."
+    embed.add_field(name="Before", value=old_content, inline=False)
+    embed.add_field(name="After", value=new_content, inline=False)
+    embed.add_field(name="Jump", value=f"[View Message]({after.jump_url})", inline=False)
+    await send_log(after.guild, embed)
+
+
 # ── AI Reply on Mention ────────────────────────────────────────────────────────
 
 @bot.event
