@@ -1,10 +1,13 @@
 import discord
 from discord.ext import commands
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from openai import AsyncOpenAI
 import json
 import os
+import asyncio
+import random
+import re
 
 TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
 
@@ -21,6 +24,7 @@ bot = commands.Bot(command_prefix="?", intents=intents)
 WARNINGS_FILE = "warnings.json"
 CONFIG_FILE = "config.json"
 HISTORY_FILE = "history.json"
+GIVEAWAYS_FILE = "giveaways.json"
 
 
 # ── Persistence ────────────────────────────────────────────────────────────────
@@ -70,13 +74,96 @@ def save_history(history):
         json.dump(dict(history), f, indent=2)
 
 
+def load_giveaways():
+    if os.path.exists(GIVEAWAYS_FILE):
+        with open(GIVEAWAYS_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+
+def save_giveaways(data):
+    with open(GIVEAWAYS_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+
 warn_data = load_warnings()
 config = load_config()
+active_giveaways = load_giveaways()   # {message_id: {...}}
+giveaway_tasks: dict = {}             # {message_id: asyncio.Task}
 
 openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
+def parse_duration(s: str):
+    """Parse '1d2h30m' style strings into total seconds. Returns None if invalid."""
+    matches = re.findall(r'(\d+)([dhms])', s.lower())
+    if not matches:
+        return None
+    units = {'d': 86400, 'h': 3600, 'm': 60, 's': 1}
+    total = sum(int(v) * units[u] for v, u in matches)
+    return total if total > 0 else None
+
+
+async def finish_giveaway(message_id: str, announce: bool = True):
+    """Pick winners and close out a giveaway."""
+    data = active_giveaways.get(message_id)
+    if not data:
+        return
+
+    channel = bot.get_channel(int(data["channel_id"]))
+    if not channel:
+        active_giveaways.pop(message_id, None)
+        save_giveaways(active_giveaways)
+        return
+
+    try:
+        message = await channel.fetch_message(int(message_id))
+    except discord.NotFound:
+        active_giveaways.pop(message_id, None)
+        save_giveaways(active_giveaways)
+        return
+
+    reaction = discord.utils.get(message.reactions, emoji="🎉")
+    entrants = [u async for u in reaction.users() if not u.bot] if reaction else []
+
+    embed = discord.Embed(title=f"🎉 {data['prize']}", color=discord.Color.greyple(),
+                          timestamp=datetime.now(timezone.utc))
+    embed.set_footer(text="Giveaway ended")
+    embed.add_field(name="Hosted by", value=data["host"], inline=True)
+    embed.add_field(name="Entries", value=str(len(entrants)), inline=True)
+
+    if not entrants:
+        embed.description = "No entries — no winner selected."
+        await message.edit(embed=embed)
+        if announce:
+            await channel.send(f"🎉 The **{data['prize']}** giveaway ended with no entries.")
+    else:
+        count = min(data["winners"], len(entrants))
+        winners = random.sample(entrants, count)
+        mentions = ", ".join(w.mention for w in winners)
+        embed.description = f"**Winner(s):** {mentions}"
+        await message.edit(embed=embed)
+        if announce:
+            await channel.send(
+                f"🎉 Congratulations {mentions}! You won **{data['prize']}**!\n"
+                f"[Jump to giveaway]({message.jump_url})"
+            )
+
+    active_giveaways.pop(message_id, None)
+    save_giveaways(active_giveaways)
+    giveaway_tasks.pop(message_id, None)
+
+
+async def schedule_giveaway(message_id: str, end_time: datetime):
+    """Wait until end_time then finish the giveaway."""
+    now = datetime.now(timezone.utc)
+    delay = (end_time - now).total_seconds()
+    if delay > 0:
+        await asyncio.sleep(delay)
+    await finish_giveaway(message_id)
+
 
 async def send_log(guild, embed):
     guild_id = str(guild.id)
@@ -99,6 +186,86 @@ async def setlog(ctx, channel: discord.TextChannel):
     config[guild_id]["log_channel"] = str(channel.id)
     save_config(config)
     await ctx.send(f"✅ Log channel set to {channel.mention}.")
+
+
+# ── Giveaway ───────────────────────────────────────────────────────────────────
+
+@bot.hybrid_command(name="gcreate", description="Start a giveaway. Usage: ?gcreate <duration> <winners> <prize>")
+@commands.has_permissions(manage_messages=True)
+async def gcreate(ctx, duration: str, winners: int, *, prize: str):
+    seconds = parse_duration(duration)
+    if not seconds:
+        await ctx.send("❌ Invalid duration. Use formats like `1h`, `30m`, `1d`, `2h30m`.")
+        return
+    if winners < 1:
+        await ctx.send("❌ Must have at least 1 winner.")
+        return
+
+    end_time = datetime.now(timezone.utc) + timedelta(seconds=seconds)
+
+    embed = discord.Embed(
+        title=f"🎉 {prize}",
+        description=(
+            f"React with 🎉 to enter!\n\n"
+            f"**Ends:** <t:{int(end_time.timestamp())}:R>\n"
+            f"**Winners:** {winners}\n"
+            f"**Hosted by:** {ctx.author.mention}"
+        ),
+        color=discord.Color.gold(),
+        timestamp=end_time
+    )
+    embed.set_footer(text="Ends at")
+
+    # Send in the current channel (or specified channel)
+    msg = await ctx.send(embed=embed)
+    await msg.add_reaction("🎉")
+
+    mid = str(msg.id)
+    active_giveaways[mid] = {
+        "channel_id": str(ctx.channel.id),
+        "guild_id": str(ctx.guild.id),
+        "end_time": end_time.isoformat(),
+        "winners": winners,
+        "prize": prize,
+        "host": str(ctx.author)
+    }
+    save_giveaways(active_giveaways)
+
+    task = bot.loop.create_task(schedule_giveaway(mid, end_time))
+    giveaway_tasks[mid] = task
+
+
+@bot.hybrid_command(name="gend", description="End a giveaway early by message ID.")
+@commands.has_permissions(manage_messages=True)
+async def gend(ctx, message_id: str):
+    if message_id not in active_giveaways:
+        await ctx.send("❌ No active giveaway with that message ID.")
+        return
+    task = giveaway_tasks.pop(message_id, None)
+    if task:
+        task.cancel()
+    await ctx.send("⏩ Ending giveaway now...")
+    await finish_giveaway(message_id)
+
+
+@bot.hybrid_command(name="greroll", description="Reroll winner(s) for a finished giveaway by message ID.")
+@commands.has_permissions(manage_messages=True)
+async def greroll(ctx, message_id: str):
+    try:
+        message = await ctx.channel.fetch_message(int(message_id))
+    except discord.NotFound:
+        await ctx.send("❌ Message not found in this channel.")
+        return
+
+    reaction = discord.utils.get(message.reactions, emoji="🎉")
+    entrants = [u async for u in reaction.users() if not u.bot] if reaction else []
+
+    if not entrants:
+        await ctx.send("❌ No entries to reroll from.")
+        return
+
+    winner = random.choice(entrants)
+    await ctx.send(f"🎉 New winner: {winner.mention}! Congratulations!")
 
 
 # ── Chaos Mode Toggle ──────────────────────────────────────────────────────────
@@ -731,6 +898,14 @@ async def on_ready():
         synced = await bot.tree.sync(guild=guild)
         print(f"Synced {len(synced)} commands to {guild.name}")
     print(f"Bot is online as {bot.user}")
+
+    # Reschedule any giveaways that were active before restart
+    for mid, data in list(active_giveaways.items()):
+        end_time = datetime.fromisoformat(data["end_time"])
+        task = bot.loop.create_task(schedule_giveaway(mid, end_time))
+        giveaway_tasks[mid] = task
+    if active_giveaways:
+        print(f"Rescheduled {len(active_giveaways)} active giveaway(s).")
 
 
 bot.run(TOKEN)
