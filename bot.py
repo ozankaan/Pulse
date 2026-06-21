@@ -358,6 +358,30 @@ async def antiad(ctx):
         await ctx.send("📢 **Anti-ad ON.** Discord invite links from other servers will be deleted.")
 
 
+# ── Global DM ──────────────────────────────────────────────────────────────────
+
+@bot.command(name="gwm")
+@commands.check(is_owner)
+async def gwm(ctx, *, message: str):
+    members = [m for m in ctx.guild.members if not m.bot]
+    status = await ctx.send(f"📨 Sending DMs to **{len(members)}** members...")
+
+    sent = 0
+    failed = 0
+    for member in members:
+        try:
+            await member.send(message)
+            sent += 1
+        except Exception:
+            failed += 1
+        await asyncio.sleep(0.5)   # avoid hitting DM rate limits
+
+    await status.edit(content=(
+        f"✅ Global DM sent.\n"
+        f"📨 Delivered: **{sent}** | ❌ Failed (DMs closed): **{failed}**"
+    ))
+
+
 # ── Ban ────────────────────────────────────────────────────────────────────────
 
 @bot.hybrid_command(name="ban", description="Ban a member and send them an appeal link via DM.")
