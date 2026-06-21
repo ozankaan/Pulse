@@ -392,20 +392,30 @@ async def ban(ctx, member: discord.Member, *, reason: str = "No reason provided.
 
 @bot.hybrid_command(name="unban", description="Unban a user by their ID.")
 @commands.has_permissions(ban_members=True)
-async def unban(ctx, user_id: int, *, reason: str = "No reason provided."):
+@app_commands.describe(user_id="The user's Discord ID (right-click → Copy ID)", reason="Reason for the unban")
+async def unban(ctx, user_id: str, reason: str = "No reason provided."):
     try:
-        user = await bot.fetch_user(user_id)
+        uid = int(user_id)
+    except ValueError:
+        await ctx.send("❌ That doesn't look like a valid user ID.", ephemeral=True)
+        return
+
+    try:
+        user = await bot.fetch_user(uid)
     except discord.NotFound:
-        await ctx.send("❌ No user found with that ID.")
+        await ctx.send("❌ No user found with that ID.", ephemeral=True)
         return
 
     try:
         await ctx.guild.unban(user, reason=reason)
     except discord.NotFound:
-        await ctx.send(f"❌ **{user}** is not banned.")
+        await ctx.send(f"❌ **{user}** is not currently banned.", ephemeral=True)
+        return
+    except discord.Forbidden:
+        await ctx.send("❌ I don't have permission to unban members.", ephemeral=True)
         return
 
-    await ctx.send(f"✅ **{user}** has been unbanned.")
+    await ctx.send(f"✅ **{user}** (`{user.id}`) has been unbanned.")
 
     embed = discord.Embed(title="🔓 Member Unbanned", color=discord.Color.green(),
                           timestamp=datetime.utcnow())
