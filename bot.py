@@ -630,46 +630,22 @@ async def unmute(ctx, member: discord.Member, *, reason: str = "No reason provid
 
 # ── Purge ───────────────────────────────────────────────────────────────────────
 
-@bot.hybrid_command(name="purge", description="Delete up to 500 messages (including messages older than 2 weeks).")
+@bot.hybrid_command(name="purge", description="Bulk-delete up to 100 messages (Discord ignores messages older than 2 weeks).")
 @commands.has_permissions(manage_messages=True)
-@app_commands.describe(amount="Number of messages to delete (max 500)")
+@app_commands.describe(amount="Number of messages to delete (max 100)")
 async def purge(ctx, amount: int):
     if amount < 1:
         await ctx.send("❌ Amount must be at least 1.", ephemeral=True)
         return
-    if amount > 500:
-        await ctx.send("❌ Maximum is 500 messages.", ephemeral=True)
+    if amount > 100:
+        await ctx.send("❌ Maximum is 100 messages.", ephemeral=True)
         return
 
     await ctx.defer(ephemeral=True)
 
-    cutoff = datetime.utcnow() - timedelta(days=14)
-    messages = [msg async for msg in ctx.channel.history(limit=amount)]
+    deleted = await ctx.channel.purge(limit=amount)
 
-    recent = [m for m in messages if m.created_at.replace(tzinfo=None) > cutoff]
-    old    = [m for m in messages if m.created_at.replace(tzinfo=None) <= cutoff]
-
-    deleted = 0
-
-    # Bulk-delete recent messages in chunks of 100
-    for i in range(0, len(recent), 100):
-        chunk = recent[i:i + 100]
-        if chunk:
-            await ctx.channel.delete_messages(chunk)
-            deleted += len(chunk)
-
-    # Delete old messages one-by-one
-    for msg in old:
-        try:
-            await msg.delete()
-            deleted += 1
-            await asyncio.sleep(0.75)   # stay well under rate limits
-        except discord.NotFound:
-            pass
-        except discord.HTTPException:
-            pass
-
-    confirm = await ctx.followup.send(f"🗑️ Deleted **{deleted}** message(s).", ephemeral=True)
+    confirm = await ctx.followup.send(f"🗑️ Deleted **{len(deleted)}** message(s).", ephemeral=True)
     await asyncio.sleep(5)
     try:
         await confirm.delete()
@@ -679,7 +655,7 @@ async def purge(ctx, amount: int):
     embed = discord.Embed(title="🗑️ Messages Purged", color=discord.Color.orange(),
                           timestamp=datetime.utcnow())
     embed.add_field(name="Channel", value=ctx.channel.mention, inline=False)
-    embed.add_field(name="Deleted", value=str(deleted), inline=True)
+    embed.add_field(name="Deleted", value=str(len(deleted)), inline=True)
     embed.add_field(name="Moderator", value=str(ctx.author), inline=False)
     await send_log(ctx.guild, embed)
 
