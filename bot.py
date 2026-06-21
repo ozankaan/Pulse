@@ -22,6 +22,7 @@ intents.bans = True
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="?", intents=intents)
+bot.remove_command("help")
 
 WARNINGS_FILE = "warnings.json"
 CONFIG_FILE = "config.json"
@@ -186,6 +187,61 @@ async def send_log(guild, embed):
     channel = guild.get_channel(int(channel_id))
     if channel:
         await channel.send(embed=embed)
+
+
+# ── Help ───────────────────────────────────────────────────────────────────────
+
+@bot.hybrid_command(name="help", description="Show all bot commands and their details.")
+async def help_command(ctx):
+    e = discord.Embed(
+        title="📖 Bot Commands",
+        description="All commands work as `/slash` or `?prefix`. Optional args shown in `[brackets]`.",
+        color=discord.Color.blurple()
+    )
+
+    e.add_field(name="⚙️ Setup", value=(
+        "`?setlog #channel` — Set the mod-log channel for this server.\n"
+    ), inline=False)
+
+    e.add_field(name="🔨 Moderation", value=(
+        "`?ban @member [reason]` — Ban a member and DM them an appeal link.\n"
+        "`?unban <user_id> [reason]` — Unban a user by their Discord ID.\n"
+        "`?mute @member <duration> [reason]` — Timeout a member (e.g. `10m`, `2h`, `1d`).\n"
+        "`?unmute @member [reason]` — Remove a timeout from a member.\n"
+        "`?purge <amount>` — Bulk-delete up to 100 messages in this channel.\n"
+    ), inline=False)
+
+    e.add_field(name="⚠️ Warnings", value=(
+        "`?warn @member [reason]` — Warn a member and DM them the reason.\n"
+        "`?warnings @member` — List all warnings for a specific member.\n"
+        "`?allwarns` — Show warnings for every warned member in the server.\n"
+        "`?removewarn @member <#>` — Remove a specific warning by its number.\n"
+        "`?clearwarns @member` — Clear all warnings for a member.\n"
+    ), inline=False)
+
+    e.add_field(name="🎉 Giveaways", value=(
+        "`?gcreate <duration> <winners> <prize>` — Start a giveaway (e.g. `?gcreate 1h 2 Nitro`).\n"
+        "`?gend <message_id>` — End a giveaway early and pick winner(s) now.\n"
+        "`?greroll <message_id>` — Reroll a new winner for a finished giveaway.\n"
+    ), inline=False)
+
+    e.add_field(name="🛡️ Protection", value=(
+        "`?nukeprot` — Toggle nuke protection (strips roles & kicks anyone who mass-deletes channels/roles or bans).\n"
+        "`?antiad` — Toggle anti-ad filter (auto-deletes invite links to other servers).\n"
+    ), inline=False)
+
+    e.add_field(name="🤖 AI & Fun", value=(
+        "`?aiturn` — Enable AI replies when the bot is @mentioned.\n"
+        "`?aioff` — Disable AI replies.\n"
+        "`?chaos` — Toggle chaos mode (bot claps back at insults).\n"
+    ), inline=False)
+
+    e.add_field(name="📢 Messaging", value=(
+        "`?gwm <message>` — DM every member in the server with your message.\n"
+    ), inline=False)
+
+    e.set_footer(text="🔒 = requires a permission  |  👑 = owner only")
+    await ctx.send(embed=e)
 
 
 # ── Config ─────────────────────────────────────────────────────────────────────
