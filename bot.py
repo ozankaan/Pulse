@@ -230,7 +230,16 @@ async def help_command(ctx):
         "`?antiad` — Toggle anti-ad filter (auto-deletes invite links to other servers).\n"
     ), inline=False)
 
-    e.add_field(name="🤖 AI & Fun", value=(
+    e.add_field(name="🎮 Fun", value=(
+        "`?8ball <question>` — Ask the magic 8-ball.\n"
+        "`?coinflip` — Flip a coin.\n"
+        "`?roll [sides]` — Roll a dice (default d6, e.g. `?roll 20`).\n"
+        "`?rps <rock/paper/scissors>` — Play against the bot.\n"
+        "`?ship @member1 [@member2]` — Check love compatibility.\n"
+        "`?avatar [@member]` — Show a member's avatar in full size.\n"
+    ), inline=False)
+
+    e.add_field(name="🤖 AI & Chaos", value=(
         "`?aiturn` — Enable AI replies when the bot is @mentioned.\n"
         "`?aioff` — Disable AI replies.\n"
         "`?chaos` — Toggle chaos mode (bot claps back at insults).\n"
@@ -450,6 +459,80 @@ async def avatar(ctx, member: discord.Member = None):
     embed = discord.Embed(title=f"🖼️ {target.display_name}'s Avatar", color=discord.Color.blurple())
     embed.set_image(url=target.display_avatar.with_size(1024).url)
     embed.set_footer(text=f"Requested by {ctx.author}")
+    await ctx.send(embed=embed)
+
+
+# ── Fun ────────────────────────────────────────────────────────────────────────
+
+EIGHT_BALL = [
+    "✅ It is certain.", "✅ Without a doubt.", "✅ Yes, definitely.",
+    "✅ You may rely on it.", "✅ Most likely.", "✅ Signs point to yes.",
+    "🤷 Ask again later.", "🤷 Cannot predict now.", "🤷 Concentrate and ask again.",
+    "❌ Don't count on it.", "❌ My reply is no.", "❌ Very doubtful.", "❌ Outlook not so good."
+]
+
+@bot.hybrid_command(name="8ball", description="Ask the magic 8-ball a question.")
+@app_commands.describe(question="Your yes/no question")
+async def eight_ball(ctx, *, question: str):
+    embed = discord.Embed(color=discord.Color.dark_purple())
+    embed.add_field(name="🎱 Question", value=question, inline=False)
+    embed.add_field(name="Answer", value=random.choice(EIGHT_BALL), inline=False)
+    await ctx.send(embed=embed)
+
+
+@bot.hybrid_command(name="coinflip", description="Flip a coin.")
+async def coinflip(ctx):
+    result = random.choice(["🪙 **Heads!**", "🪙 **Tails!**"])
+    await ctx.send(result)
+
+
+@bot.hybrid_command(name="roll", description="Roll a dice. Default is d6.")
+@app_commands.describe(sides="Number of sides on the dice (default 6)")
+async def roll(ctx, sides: int = 6):
+    if sides < 2:
+        await ctx.send("❌ A dice needs at least 2 sides.", ephemeral=True)
+        return
+    result = random.randint(1, sides)
+    await ctx.send(f"🎲 You rolled a **d{sides}** and got **{result}**!")
+
+
+@bot.hybrid_command(name="rps", description="Play rock-paper-scissors against the bot.")
+@app_commands.describe(choice="rock, paper, or scissors")
+async def rps(ctx, choice: str):
+    choice = choice.lower()
+    if choice not in ("rock", "paper", "scissors"):
+        await ctx.send("❌ Choose **rock**, **paper**, or **scissors**.", ephemeral=True)
+        return
+    icons = {"rock": "🪨", "paper": "📄", "scissors": "✂️"}
+    bot_choice = random.choice(["rock", "paper", "scissors"])
+    wins_against = {"rock": "scissors", "paper": "rock", "scissors": "paper"}
+    if choice == bot_choice:
+        result = "🤝 **It's a tie!**"
+    elif wins_against[choice] == bot_choice:
+        result = "🏆 **You win!**"
+    else:
+        result = "😈 **I win!**"
+    await ctx.send(f"{icons[choice]} vs {icons[bot_choice]} — {result}")
+
+
+@bot.hybrid_command(name="ship", description="Check the love compatibility between two members.")
+@app_commands.describe(member1="First member", member2="Second member (leave empty to ship with yourself)")
+async def ship(ctx, member1: discord.Member, member2: discord.Member = None):
+    target = member2 or ctx.author
+    score = (member1.id ^ target.id) % 101   # deterministic but looks random
+    if score >= 80:
+        bar, label = "💖💖💖💖💖", "Soulmates!"
+    elif score >= 60:
+        bar, label = "💖💖💖💖🤍", "Great match!"
+    elif score >= 40:
+        bar, label = "💖💖💖🤍🤍", "Could work!"
+    elif score >= 20:
+        bar, label = "💖💖🤍🤍🤍", "It's complicated."
+    else:
+        bar, label = "💖🤍🤍🤍🤍", "Not meant to be."
+    embed = discord.Embed(title="💘 Ship-o-meter", color=discord.Color.pink())
+    embed.add_field(name="Couple", value=f"{member1.mention} ❤️ {target.mention}", inline=False)
+    embed.add_field(name=f"{score}%  {bar}", value=label, inline=False)
     await ctx.send(embed=embed)
 
 
