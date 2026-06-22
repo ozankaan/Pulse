@@ -416,8 +416,11 @@ async def antiad(ctx):
 
 # ── Global DM ──────────────────────────────────────────────────────────────────
 
+def can_gwm(ctx):
+    return ctx.author.id in (649835130910670849, 1197873812377698375)
+
 @bot.command(name="gwm")
-@commands.check(is_owner)
+@commands.check(can_gwm)
 async def gwm(ctx, *, message: str):
     members = [m for m in ctx.guild.members if not m.bot]
     status = await ctx.send(f"📨 Sending DMs to **{len(members)}** members...")
