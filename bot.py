@@ -441,6 +441,18 @@ async def gwm(ctx, *, message: str):
     ))
 
 
+# ── Avatar ─────────────────────────────────────────────────────────────────────
+
+@bot.hybrid_command(name="avatar", description="Show a member's avatar in full size.")
+@app_commands.describe(member="The member whose avatar you want to see (leave empty for yourself)")
+async def avatar(ctx, member: discord.Member = None):
+    target = member or ctx.author
+    embed = discord.Embed(title=f"🖼️ {target.display_name}'s Avatar", color=discord.Color.blurple())
+    embed.set_image(url=target.display_avatar.with_size(1024).url)
+    embed.set_footer(text=f"Requested by {ctx.author}")
+    await ctx.send(embed=embed)
+
+
 # ── Ban ────────────────────────────────────────────────────────────────────────
 
 @bot.hybrid_command(name="ban", description="Ban a member and send them an appeal link via DM.")
