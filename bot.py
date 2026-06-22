@@ -28,6 +28,7 @@ WARNINGS_FILE = "warnings.json"
 CONFIG_FILE = "config.json"
 HISTORY_FILE = "history.json"
 GIVEAWAYS_FILE = "giveaways.json"
+ECONOMY_FILE = "economy.json"
 
 
 # ── Persistence ────────────────────────────────────────────────────────────────
@@ -89,10 +90,36 @@ def save_giveaways(data):
         json.dump(data, f, indent=2)
 
 
+def load_economy():
+    if os.path.exists(ECONOMY_FILE):
+        with open(ECONOMY_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+def save_economy(data):
+    with open(ECONOMY_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+def get_balance(user_id: int) -> int:
+    uid = str(user_id)
+    if uid not in economy:
+        economy[uid] = {"balance": 1000, "last_daily": None}
+        save_economy(economy)
+    return economy[uid]["balance"]
+
+def update_balance(user_id: int, amount: int):
+    uid = str(user_id)
+    get_balance(user_id)          # ensure entry exists
+    economy[uid]["balance"] = max(0, economy[uid]["balance"] + amount)
+    save_economy(economy)
+    return economy[uid]["balance"]
+
+
 warn_data = load_warnings()
 config = load_config()
 active_giveaways = load_giveaways()   # {message_id: {...}}
 giveaway_tasks: dict = {}             # {message_id: asyncio.Task}
+economy = load_economy()
 
 openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
@@ -243,6 +270,14 @@ async def help_command(ctx):
         "`?aiturn` — Enable AI replies when the bot is @mentioned.\n"
         "`?aioff` — Disable AI replies.\n"
         "`?chaos` — Toggle chaos mode (bot claps back at insults).\n"
+    ), inline=False)
+
+    e.add_field(name="🎲 Gambling", value=(
+        "`?balance [@member]` — Check your coin balance (everyone starts with 1,000 🪙).\n"
+        "`?daily` — Claim **500** 🪙 free coins once every 24 hours.\n"
+        "`?slots <bet>` — Spin the slot machine (min 10 🪙, jackpot = 15x).\n"
+        "`?flip <bet> <heads/tails>` — Bet on a coin flip (2x payout).\n"
+        "`?blackjack <bet>` — Play blackjack with Hit/Stand buttons (min 10 🪙).\n"
     ), inline=False)
 
     e.add_field(name="📢 Messaging", value=(
@@ -534,6 +569,245 @@ async def ship(ctx, member1: discord.Member, member2: discord.Member = None):
     embed.add_field(name="Couple", value=f"{member1.mention} ❤️ {target.mention}", inline=False)
     embed.add_field(name=f"{score}%  {bar}", value=label, inline=False)
     await ctx.send(embed=embed)
+
+
+# ── Gambling ────────────────────────────────────────────────────────────────────
+
+DAILY_REWARD   = 500
+DAILY_COOLDOWN = 86400   # seconds
+
+SLOTS_REELS = ["🍒", "🍋", "🍇", "💎", "7️⃣", "🎰"]
+SLOTS_MULT  = {"💎": 15, "7️⃣": 10, "🎰": 8, "🍇": 5, "🍋": 3, "🍒": 2}
+
+
+def _build_deck():
+    suits = ["♠️", "♥️", "♦️", "♣️"]
+    ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
+    deck = [f"{r}{s}" for s in suits for r in ranks]
+    random.shuffle(deck)
+    return deck
+
+def _card_value(card: str) -> int:
+    rank = card[:-2] if len(card) > 2 else card[0]
+    if rank in ("J", "Q", "K"):
+        return 10
+    if rank == "A":
+        return 11
+    return int(rank)
+
+def _hand_total(hand: list) -> int:
+    total = sum(_card_value(c) for c in hand)
+    aces  = sum(1 for c in hand if c.startswith("A"))
+    while total > 21 and aces:
+        total -= 10
+        aces  -= 1
+    return total
+
+def _fmt_hand(hand: list) -> str:
+    return "  ".join(hand)
+
+
+@bot.hybrid_command(name="balance", description="Check your (or another member's) coin balance.")
+@app_commands.describe(member="Member to check (leave empty for yourself)")
+async def balance(ctx, member: discord.Member = None):
+    target = member or ctx.author
+    bal = get_balance(target.id)
+    embed = discord.Embed(title="💰 Wallet", color=discord.Color.gold())
+    embed.set_thumbnail(url=target.display_avatar.url)
+    embed.add_field(name=target.display_name, value=f"**{bal:,}** 🪙 coins", inline=False)
+    await ctx.send(embed=embed)
+
+
+@bot.hybrid_command(name="daily", description="Claim your daily 500-coin reward.")
+async def daily(ctx):
+    uid = str(ctx.author.id)
+    get_balance(ctx.author.id)   # ensure entry
+    now = time.time()
+    last = economy[uid].get("last_daily") or 0
+    remaining = DAILY_COOLDOWN - (now - last)
+    if remaining > 0:
+        hours, rem = divmod(int(remaining), 3600)
+        mins = rem // 60
+        await ctx.send(f"⏳ You already claimed today! Come back in **{hours}h {mins}m**.")
+        return
+    economy[uid]["last_daily"] = now
+    new_bal = update_balance(ctx.author.id, DAILY_REWARD)
+    await ctx.send(f"✅ You claimed your daily **{DAILY_REWARD:,}** 🪙! Balance: **{new_bal:,}** 🪙")
+
+
+@bot.hybrid_command(name="slots", description="Spin the slot machine and win big.")
+@app_commands.describe(bet="Amount of coins to bet")
+async def slots(ctx, bet: int):
+    bal = get_balance(ctx.author.id)
+    if bet < 10:
+        await ctx.send("❌ Minimum bet is **10** 🪙.", ephemeral=True)
+        return
+    if bet > bal:
+        await ctx.send(f"❌ You only have **{bal:,}** 🪙.", ephemeral=True)
+        return
+
+    reels = [random.choice(SLOTS_REELS) for _ in range(3)]
+    display = f"[ {reels[0]} | {reels[1]} | {reels[2]} ]"
+
+    if reels[0] == reels[1] == reels[2]:
+        mult    = SLOTS_MULT[reels[0]]
+        winnings = bet * mult
+        update_balance(ctx.author.id, winnings - bet)
+        new_bal = get_balance(ctx.author.id)
+        result  = f"🎉 **JACKPOT! {mult}x!** +**{winnings:,}** 🪙"
+        color   = discord.Color.gold()
+    elif reels[0] == reels[1] or reels[1] == reels[2] or reels[0] == reels[2]:
+        winnings = bet * 2
+        update_balance(ctx.author.id, winnings - bet)
+        new_bal = get_balance(ctx.author.id)
+        result  = f"✅ **Two of a kind! 2x!** +**{winnings:,}** 🪙"
+        color   = discord.Color.green()
+    else:
+        update_balance(ctx.author.id, -bet)
+        new_bal = get_balance(ctx.author.id)
+        result  = f"❌ No match. -**{bet:,}** 🪙"
+        color   = discord.Color.red()
+
+    embed = discord.Embed(title="🎰 Slot Machine", description=display, color=color)
+    embed.add_field(name="Result", value=result, inline=False)
+    embed.add_field(name="Balance", value=f"**{new_bal:,}** 🪙", inline=False)
+    await ctx.send(embed=embed)
+
+
+@bot.hybrid_command(name="flip", description="Bet coins on a coin flip.")
+@app_commands.describe(bet="Amount to bet", side="heads or tails")
+async def flip(ctx, bet: int, side: str):
+    side = side.lower()
+    if side not in ("heads", "tails"):
+        await ctx.send("❌ Choose **heads** or **tails**.", ephemeral=True)
+        return
+    bal = get_balance(ctx.author.id)
+    if bet < 1:
+        await ctx.send("❌ Bet must be at least **1** 🪙.", ephemeral=True)
+        return
+    if bet > bal:
+        await ctx.send(f"❌ You only have **{bal:,}** 🪙.", ephemeral=True)
+        return
+
+    result = random.choice(["heads", "tails"])
+    won    = result == side
+    update_balance(ctx.author.id, bet if won else -bet)
+    new_bal = get_balance(ctx.author.id)
+    icon    = "🪙"
+    embed   = discord.Embed(
+        title  = f"{icon} Coin Flip",
+        color  = discord.Color.green() if won else discord.Color.red()
+    )
+    embed.add_field(name="Result", value=f"**{result.capitalize()}!**", inline=True)
+    embed.add_field(name="Your pick", value=side.capitalize(), inline=True)
+    embed.add_field(name="Outcome", value=f"{'✅ +' if won else '❌ -'}**{bet:,}** 🪙", inline=False)
+    embed.add_field(name="Balance", value=f"**{new_bal:,}** 🪙", inline=False)
+    await ctx.send(embed=embed)
+
+
+class BlackjackView(discord.ui.View):
+    def __init__(self, ctx, bet: int, deck, player_hand, dealer_hand):
+        super().__init__(timeout=60)
+        self.ctx         = ctx
+        self.bet         = bet
+        self.deck        = deck
+        self.player_hand = player_hand
+        self.dealer_hand = dealer_hand
+
+    def _make_embed(self, reveal_dealer=False, footer=""):
+        p_total = _hand_total(self.player_hand)
+        d_total = _hand_total(self.dealer_hand)
+        embed   = discord.Embed(title="🃏 Blackjack", color=discord.Color.blurple())
+        if reveal_dealer:
+            embed.add_field(name=f"Dealer — {d_total}", value=_fmt_hand(self.dealer_hand), inline=False)
+        else:
+            embed.add_field(name="Dealer", value=f"{self.dealer_hand[0]}  🂠", inline=False)
+        embed.add_field(name=f"You — {p_total}", value=_fmt_hand(self.player_hand), inline=False)
+        if footer:
+            embed.set_footer(text=footer)
+        return embed
+
+    async def _end(self, interaction, outcome: str):
+        for child in self.children:
+            child.disabled = True
+
+        p_total = _hand_total(self.player_hand)
+        d_total = _hand_total(self.dealer_hand)
+
+        if outcome == "blackjack":
+            delta, note = int(self.bet * 1.5), f"🎉 Blackjack! +{int(self.bet*1.5):,} 🪙"
+        elif outcome == "win":
+            delta, note = self.bet, f"✅ You win! +{self.bet:,} 🪙"
+        elif outcome == "push":
+            delta, note = 0, "🤝 Push — bet returned."
+        else:
+            delta, note = -self.bet, f"❌ You lose. -{self.bet:,} 🪙"
+
+        update_balance(interaction.user.id, delta)
+        new_bal = get_balance(interaction.user.id)
+        embed   = self._make_embed(reveal_dealer=True, footer=f"{note}  |  Balance: {new_bal:,} 🪙")
+        await interaction.response.edit_message(embed=embed, view=self)
+        self.stop()
+
+    @discord.ui.button(label="Hit", style=discord.ButtonStyle.green)
+    async def hit(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("This isn't your game!", ephemeral=True)
+            return
+        self.player_hand.append(self.deck.pop())
+        p_total = _hand_total(self.player_hand)
+        if p_total > 21:
+            await self._end(interaction, "lose")
+        elif p_total == 21:
+            await self.stand.callback(self, interaction)
+        else:
+            await interaction.response.edit_message(embed=self._make_embed(), view=self)
+
+    @discord.ui.button(label="Stand", style=discord.ButtonStyle.red)
+    async def stand(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("This isn't your game!", ephemeral=True)
+            return
+        while _hand_total(self.dealer_hand) < 17:
+            self.dealer_hand.append(self.deck.pop())
+        p = _hand_total(self.player_hand)
+        d = _hand_total(self.dealer_hand)
+        if d > 21 or p > d:
+            outcome = "win"
+        elif p == d:
+            outcome = "push"
+        else:
+            outcome = "lose"
+        await self._end(interaction, outcome)
+
+
+@bot.hybrid_command(name="blackjack", description="Play blackjack against the dealer.")
+@app_commands.describe(bet="Amount of coins to bet")
+async def blackjack(ctx, bet: int):
+    bal = get_balance(ctx.author.id)
+    if bet < 10:
+        await ctx.send("❌ Minimum bet is **10** 🪙.", ephemeral=True)
+        return
+    if bet > bal:
+        await ctx.send(f"❌ You only have **{bal:,}** 🪙.", ephemeral=True)
+        return
+
+    deck        = _build_deck()
+    player_hand = [deck.pop(), deck.pop()]
+    dealer_hand = [deck.pop(), deck.pop()]
+
+    view  = BlackjackView(ctx, bet, deck, player_hand, dealer_hand)
+    embed = view._make_embed()
+
+    if _hand_total(player_hand) == 21:
+        update_balance(ctx.author.id, int(bet * 1.5))
+        new_bal = get_balance(ctx.author.id)
+        embed   = view._make_embed(reveal_dealer=True,
+                                   footer=f"🎉 Blackjack! +{int(bet*1.5):,} 🪙  |  Balance: {new_bal:,} 🪙")
+        await ctx.send(embed=embed)
+        return
+
+    await ctx.send(embed=embed, view=view)
 
 
 # ── Ban ────────────────────────────────────────────────────────────────────────
