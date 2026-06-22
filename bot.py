@@ -10,6 +10,7 @@ import asyncio
 import random
 import re
 import time
+import aiohttp
 
 TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
 
@@ -28,7 +29,8 @@ WARNINGS_FILE = "warnings.json"
 CONFIG_FILE = "config.json"
 HISTORY_FILE = "history.json"
 GIVEAWAYS_FILE = "giveaways.json"
-ECONOMY_FILE = "economy.json"
+ECONOMY_FILE       = "economy.json"
+INTERACTIONS_FILE  = "interactions.json"
 
 
 # ── Persistence ────────────────────────────────────────────────────────────────
@@ -120,6 +122,29 @@ config = load_config()
 active_giveaways = load_giveaways()   # {message_id: {...}}
 giveaway_tasks: dict = {}             # {message_id: asyncio.Task}
 economy = load_economy()
+
+
+def load_interactions():
+    if os.path.exists(INTERACTIONS_FILE):
+        with open(INTERACTIONS_FILE, "r") as f:
+            return json.load(f)
+    return {"kiss": {}, "hug": {}, "pet": {}}
+
+def save_interactions():
+    with open(INTERACTIONS_FILE, "w") as f:
+        json.dump(interactions, f, indent=2)
+
+def get_interaction_count(action: str, giver_id: int, target_id: int) -> int:
+    return interactions[action].get(str(giver_id), {}).get(str(target_id), 0)
+
+def increment_interaction(action: str, giver_id: int, target_id: int) -> int:
+    g, t = str(giver_id), str(target_id)
+    interactions[action].setdefault(g, {})
+    interactions[action][g][t] = interactions[action][g].get(t, 0) + 1
+    save_interactions()
+    return interactions[action][g][t]
+
+interactions = load_interactions()
 
 openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
@@ -255,6 +280,12 @@ async def help_command(ctx):
     e.add_field(name="🛡️ Protection", value=(
         "`?nukeprot` — Toggle nuke protection (strips roles & kicks anyone who mass-deletes channels/roles or bans).\n"
         "`?antiad` — Toggle anti-ad filter (auto-deletes invite links to other servers).\n"
+    ), inline=False)
+
+    e.add_field(name="🫂 Social", value=(
+        "`?hug @member` — Hug someone (with GIF + running count).\n"
+        "`?kiss @member` — Kiss someone (with GIF + running count).\n"
+        "`?pet @member` — Pet someone (with GIF + running count).\n"
     ), inline=False)
 
     e.add_field(name="🎮 Fun", value=(
@@ -808,6 +839,74 @@ async def blackjack(ctx, bet: int):
         return
 
     await ctx.send(embed=embed, view=view)
+
+
+# ── Social (kiss / hug / pet) ──────────────────────────────────────────────────
+
+NEKOS_BASE = "https://nekos.life/api/v2/img/{}"
+
+async def fetch_gif(action: str) -> str:
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(NEKOS_BASE.format(action), timeout=aiohttp.ClientTimeout(total=5)) as r:
+                data = await r.json()
+                return data.get("url", "")
+    except Exception:
+        return ""
+
+
+@bot.hybrid_command(name="hug", description="Hug a member.")
+@app_commands.describe(member="Who do you want to hug?")
+async def hug(ctx, member: discord.Member):
+    if member.id == ctx.author.id:
+        await ctx.send("🤗 You hugged yourself. Lonely but valid.")
+        return
+    count = increment_interaction("hug", ctx.author.id, member.id)
+    gif   = await fetch_gif("hug")
+    embed = discord.Embed(
+        description=f"🤗 **{ctx.author.display_name}** hugged **{member.display_name}**!\n"
+                    f"That's **{count}** hug{'s' if count != 1 else ''} total!",
+        color=discord.Color.orange()
+    )
+    if gif:
+        embed.set_image(url=gif)
+    await ctx.send(embed=embed)
+
+
+@bot.hybrid_command(name="kiss", description="Kiss a member.")
+@app_commands.describe(member="Who do you want to kiss?")
+async def kiss(ctx, member: discord.Member):
+    if member.id == ctx.author.id:
+        await ctx.send("💋 You kissed yourself in the mirror. Respect.")
+        return
+    count = increment_interaction("kiss", ctx.author.id, member.id)
+    gif   = await fetch_gif("kiss")
+    embed = discord.Embed(
+        description=f"💋 **{ctx.author.display_name}** kissed **{member.display_name}**!\n"
+                    f"That's **{count}** kiss{'es' if count != 1 else ''} total!",
+        color=discord.Color.red()
+    )
+    if gif:
+        embed.set_image(url=gif)
+    await ctx.send(embed=embed)
+
+
+@bot.hybrid_command(name="pet", description="Pet a member.")
+@app_commands.describe(member="Who do you want to pet?")
+async def pet(ctx, member: discord.Member):
+    if member.id == ctx.author.id:
+        await ctx.send("🖐️ You patted your own head. It's okay, you tried.")
+        return
+    count = increment_interaction("pet", ctx.author.id, member.id)
+    gif   = await fetch_gif("pat")
+    embed = discord.Embed(
+        description=f"🖐️ **{ctx.author.display_name}** petted **{member.display_name}**!\n"
+                    f"That's **{count}** pet{'s' if count != 1 else ''} total!",
+        color=discord.Color.green()
+    )
+    if gif:
+        embed.set_image(url=gif)
+    await ctx.send(embed=embed)
 
 
 # ── Ban ────────────────────────────────────────────────────────────────────────
