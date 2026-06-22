@@ -1619,6 +1619,8 @@ async def on_command_error(ctx, error):
 
 @bot.event
 async def on_ready():
+    # Global sync — makes commands available in DMs and everywhere else
+    await bot.tree.sync()
     for guild in bot.guilds:
         bot.tree.copy_global_to(guild=guild)
         synced = await bot.tree.sync(guild=guild)
