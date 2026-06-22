@@ -855,16 +855,16 @@ async def fetch_gif(action: str) -> str:
         return ""
 
 
-@bot.hybrid_command(name="hug", description="Hug a member.")
-@app_commands.describe(member="Who do you want to hug?")
-async def hug(ctx, member: discord.Member):
-    if member.id == ctx.author.id:
+@bot.hybrid_command(name="hug", description="Hug someone.")
+@app_commands.describe(user="Who do you want to hug?")
+async def hug(ctx, user: discord.User):
+    if user.id == ctx.author.id:
         await ctx.send("🤗 You hugged yourself. Lonely but valid.")
         return
-    count = increment_interaction("hug", ctx.author.id, member.id)
+    count = increment_interaction("hug", ctx.author.id, user.id)
     gif   = await fetch_gif("hug")
     embed = discord.Embed(
-        description=f"🤗 **{ctx.author.display_name}** hugged **{member.display_name}**!\n"
+        description=f"🤗 **{ctx.author.display_name}** hugged **{user.display_name}**!\n"
                     f"That's **{count}** hug{'s' if count != 1 else ''} total!",
         color=discord.Color.orange()
     )
@@ -873,16 +873,16 @@ async def hug(ctx, member: discord.Member):
     await ctx.send(embed=embed)
 
 
-@bot.hybrid_command(name="kiss", description="Kiss a member.")
-@app_commands.describe(member="Who do you want to kiss?")
-async def kiss(ctx, member: discord.Member):
-    if member.id == ctx.author.id:
+@bot.hybrid_command(name="kiss", description="Kiss someone.")
+@app_commands.describe(user="Who do you want to kiss?")
+async def kiss(ctx, user: discord.User):
+    if user.id == ctx.author.id:
         await ctx.send("💋 You kissed yourself in the mirror. Respect.")
         return
-    count = increment_interaction("kiss", ctx.author.id, member.id)
+    count = increment_interaction("kiss", ctx.author.id, user.id)
     gif   = await fetch_gif("kiss")
     embed = discord.Embed(
-        description=f"💋 **{ctx.author.display_name}** kissed **{member.display_name}**!\n"
+        description=f"💋 **{ctx.author.display_name}** kissed **{user.display_name}**!\n"
                     f"That's **{count}** kiss{'es' if count != 1 else ''} total!",
         color=discord.Color.red()
     )
@@ -891,16 +891,16 @@ async def kiss(ctx, member: discord.Member):
     await ctx.send(embed=embed)
 
 
-@bot.hybrid_command(name="pet", description="Pet a member.")
-@app_commands.describe(member="Who do you want to pet?")
-async def pet(ctx, member: discord.Member):
-    if member.id == ctx.author.id:
+@bot.hybrid_command(name="pet", description="Pet someone.")
+@app_commands.describe(user="Who do you want to pet?")
+async def pet(ctx, user: discord.User):
+    if user.id == ctx.author.id:
         await ctx.send("🖐️ You patted your own head. It's okay, you tried.")
         return
-    count = increment_interaction("pet", ctx.author.id, member.id)
+    count = increment_interaction("pet", ctx.author.id, user.id)
     gif   = await fetch_gif("pat")
     embed = discord.Embed(
-        description=f"🖐️ **{ctx.author.display_name}** petted **{member.display_name}**!\n"
+        description=f"🖐️ **{ctx.author.display_name}** petted **{user.display_name}**!\n"
                     f"That's **{count}** pet{'s' if count != 1 else ''} total!",
         color=discord.Color.green()
     )
