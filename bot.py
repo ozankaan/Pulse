@@ -293,6 +293,9 @@ async def help_command(ctx):
         "`?nsfw [category]` — Get a random NSFW image (NSFW channels only).\n"
         "Categories: `waifu`, `neko`, `trap`, `blowjob`, `hentai`, `oral`, `paizuri`\n"
         "Leave blank for a random category.\n"
+        "`?fuck @member` — 🔞 NSFW channels only.\n"
+        "`?ride @member` — 🔞 NSFW channels only.\n"
+        "`?blowjob @member` — 🔞 NSFW channels only.\n"
     ), inline=False)
 
     e.add_field(name="🎮 Fun", value=(
@@ -955,6 +958,102 @@ async def nsfw(ctx, category: str = None):
     await ctx.send(embed=embed)
 
 nsfw.app_command.nsfw = True
+
+
+# ── NSFW action GIFs ───────────────────────────────────────────────────────────
+
+# nekos.life NSFW GIF endpoint map
+NSFW_ACTION_MAP = {
+    "blowjob": "blowjob",
+    "fuck":    "classic",
+    "ride":    "nsfw_neko_gif",
+}
+
+async def fetch_nsfw_action_gif(action: str) -> str:
+    category = NSFW_ACTION_MAP.get(action, action)
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                NEKOS_BASE.format(category),
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as r:
+                data = await r.json()
+                return data.get("url", "")
+    except Exception:
+        return ""
+
+
+def _nsfw_channel_check(ctx) -> bool:
+    return getattr(ctx.channel, "is_nsfw", lambda: False)()
+
+
+@bot.hybrid_command(name="fuck", description="🔞 NSFW action — only works in NSFW channels.")
+@app_commands.describe(user="Who do you want to fuck?")
+async def fuck_cmd(ctx, user: discord.Member):
+    if not _nsfw_channel_check(ctx):
+        await ctx.send("❌ This command can only be used in an NSFW channel.", ephemeral=True)
+        return
+    if user.id == ctx.author.id:
+        await ctx.send("😳 Bit lonely, eh?")
+        return
+    count = increment_interaction("fuck", ctx.author.id, user.id)
+    gif = await fetch_nsfw_action_gif("fuck")
+    embed = discord.Embed(
+        description=f"🔞 **{ctx.author.display_name}** fucked **{user.display_name}**!\n"
+                    f"That's **{count}** time{'s' if count != 1 else ''} total!",
+        color=discord.Color.dark_red()
+    )
+    if gif:
+        embed.set_image(url=gif)
+    await ctx.send(embed=embed)
+
+fuck_cmd.app_command.nsfw = True
+
+
+@bot.hybrid_command(name="ride", description="🔞 NSFW action — only works in NSFW channels.")
+@app_commands.describe(user="Who do you want to ride?")
+async def ride_cmd(ctx, user: discord.Member):
+    if not _nsfw_channel_check(ctx):
+        await ctx.send("❌ This command can only be used in an NSFW channel.", ephemeral=True)
+        return
+    if user.id == ctx.author.id:
+        await ctx.send("😳 Physics doesn't work that way.")
+        return
+    count = increment_interaction("ride", ctx.author.id, user.id)
+    gif = await fetch_nsfw_action_gif("ride")
+    embed = discord.Embed(
+        description=f"🔞 **{ctx.author.display_name}** rode **{user.display_name}**!\n"
+                    f"That's **{count}** time{'s' if count != 1 else ''} total!",
+        color=discord.Color.dark_red()
+    )
+    if gif:
+        embed.set_image(url=gif)
+    await ctx.send(embed=embed)
+
+ride_cmd.app_command.nsfw = True
+
+
+@bot.hybrid_command(name="blowjob", description="🔞 NSFW action — only works in NSFW channels.")
+@app_commands.describe(user="Who do you want to give a blowjob to?")
+async def blowjob_cmd(ctx, user: discord.Member):
+    if not _nsfw_channel_check(ctx):
+        await ctx.send("❌ This command can only be used in an NSFW channel.", ephemeral=True)
+        return
+    if user.id == ctx.author.id:
+        await ctx.send("😳 That's... impressive but no.")
+        return
+    count = increment_interaction("blowjob", ctx.author.id, user.id)
+    gif = await fetch_nsfw_action_gif("blowjob")
+    embed = discord.Embed(
+        description=f"🔞 **{ctx.author.display_name}** gave **{user.display_name}** a blowjob!\n"
+                    f"That's **{count}** time{'s' if count != 1 else ''} total!",
+        color=discord.Color.dark_red()
+    )
+    if gif:
+        embed.set_image(url=gif)
+    await ctx.send(embed=embed)
+
+blowjob_cmd.app_command.nsfw = True
 
 
 def hierarchy_error(ctx, member: discord.Member) -> str | None:
