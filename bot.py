@@ -125,10 +125,14 @@ economy = load_economy()
 
 
 def load_interactions():
+    defaults = {"kiss": {}, "hug": {}, "pet": {}, "fuck": {}, "ride": {}, "blowjob": {}}
     if os.path.exists(INTERACTIONS_FILE):
         with open(INTERACTIONS_FILE, "r") as f:
-            return json.load(f)
-    return {"kiss": {}, "hug": {}, "pet": {}}
+            data = json.load(f)
+        for key in defaults:
+            data.setdefault(key, {})
+        return data
+    return defaults
 
 def save_interactions():
     with open(INTERACTIONS_FILE, "w") as f:
