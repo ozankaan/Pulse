@@ -966,23 +966,23 @@ nsfw.app_command.nsfw = True
 
 # ── NSFW action GIFs ───────────────────────────────────────────────────────────
 
-# nekos.life NSFW GIF endpoint map
+# nekobot.xyz NSFW GIF type map
 NSFW_ACTION_MAP = {
     "blowjob": "blowjob",
-    "fuck":    "classic",
-    "ride":    "nsfw_neko_gif",
+    "fuck":    "pgif",
+    "ride":    "pgif",
 }
 
 async def fetch_nsfw_action_gif(action: str) -> str:
-    category = NSFW_ACTION_MAP.get(action, action)
+    category = NSFW_ACTION_MAP.get(action, "pgif")
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                NEKOS_BASE.format(category),
+                f"https://nekobot.xyz/api/image?type={category}",
                 timeout=aiohttp.ClientTimeout(total=5)
             ) as r:
                 data = await r.json()
-                return data.get("url", "")
+                return data.get("message", "")
     except Exception:
         return ""
 
