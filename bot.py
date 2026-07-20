@@ -1631,7 +1631,9 @@ async def on_message(message):
 
 @bot.event
 async def on_command_error(ctx, error):
-    if isinstance(error, commands.MissingPermissions):
+    if isinstance(error, (commands.CommandNotFound, commands.NotOwner)):
+        return
+    elif isinstance(error, commands.MissingPermissions):
         await ctx.send("❌ You don't have permission to use this command.")
     elif isinstance(error, commands.MemberNotFound):
         await ctx.send("❌ Member not found.")
