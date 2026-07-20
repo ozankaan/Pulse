@@ -966,23 +966,23 @@ nsfw.app_command.nsfw = True
 
 # ── NSFW action GIFs ───────────────────────────────────────────────────────────
 
-# nekobot.xyz NSFW GIF type map
+# purrbot.site NSFW GIF category map
 NSFW_ACTION_MAP = {
     "blowjob": "blowjob",
-    "fuck":    "pgif",
-    "ride":    "pgif",
+    "fuck":    "fuck",
+    "ride":    "fuck",
 }
 
 async def fetch_nsfw_action_gif(action: str) -> str:
-    category = NSFW_ACTION_MAP.get(action, "pgif")
+    category = NSFW_ACTION_MAP.get(action, "fuck")
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                f"https://nekobot.xyz/api/image?type={category}",
+                f"https://purrbot.site/api/img/nsfw/{category}/gif",
                 timeout=aiohttp.ClientTimeout(total=5)
             ) as r:
                 data = await r.json()
-                return data.get("message", "")
+                return data.get("link", "")
     except Exception:
         return ""
 
