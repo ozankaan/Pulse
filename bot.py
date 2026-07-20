@@ -125,7 +125,8 @@ economy = load_economy()
 
 
 def load_interactions():
-    defaults = {"kiss": {}, "hug": {}, "pet": {}, "fuck": {}, "ride": {}, "blowjob": {}}
+    defaults = {"kiss": {}, "hug": {}, "pet": {}, "fuck": {}, "ride": {}, "blowjob": {},
+                "spank": {}, "lick": {}, "tease": {}, "anal": {}, "cum": {}, "yuri": {}}
     if os.path.exists(INTERACTIONS_FILE):
         with open(INTERACTIONS_FILE, "r") as f:
             data = json.load(f)
@@ -294,12 +295,11 @@ async def help_command(ctx):
     ), inline=False)
 
     e.add_field(name="🔞 NSFW", value=(
-        "`?nsfw [category]` — Get a random NSFW image (NSFW channels only).\n"
-        "Categories: `waifu`, `neko`, `trap`, `blowjob`, `hentai`, `oral`, `paizuri`\n"
-        "Leave blank for a random category.\n"
-        "`?fuck @member` — 🔞 NSFW channels only.\n"
-        "`?ride @member` — 🔞 NSFW channels only.\n"
-        "`?blowjob @member` — 🔞 NSFW channels only.\n"
+        "`?nsfw [category]` — Random NSFW image (NSFW channels only).\n"
+        "`?fuck @member` `?ride @member` `?blowjob @member`\n"
+        "`?spank @member` `?lick @member` `?tease @member`\n"
+        "`?anal @member` `?cum @member` `?yuri @member`\n"
+        "All commands require an NSFW channel. 🔞\n"
     ), inline=False)
 
     e.add_field(name="🎮 Fun", value=(
@@ -971,6 +971,12 @@ NSFW_ACTION_MAP = {
     "blowjob": "blowjob",
     "fuck":    "fuck",
     "ride":    "fuck",
+    "spank":   "spank",
+    "lick":    "neko",
+    "tease":   "solo",
+    "anal":    "anal",
+    "cum":     "cum",
+    "yuri":    "yuri",
 }
 
 async def fetch_nsfw_action_gif(action: str) -> str:
@@ -1058,6 +1064,61 @@ async def blowjob_cmd(ctx, user: discord.Member):
     await ctx.send(embed=embed)
 
 blowjob_cmd.app_command.nsfw = True
+
+
+def _make_nsfw_cmd(name, action, description, text_fn, self_msg):
+    @bot.hybrid_command(name=name, description=f"🔞 {description} — NSFW channels only.")
+    @app_commands.describe(user="Who?")
+    async def _cmd(ctx, user: discord.Member):
+        if not _nsfw_channel_check(ctx):
+            await ctx.send("❌ This command can only be used in an NSFW channel.", ephemeral=True)
+            return
+        if user.id == ctx.author.id:
+            await ctx.send(self_msg)
+            return
+        count = increment_interaction(action, ctx.author.id, user.id)
+        gif = await fetch_nsfw_action_gif(action)
+        embed = discord.Embed(
+            description=text_fn(ctx.author.display_name, user.display_name, count),
+            color=discord.Color.dark_red()
+        )
+        if gif:
+            embed.set_image(url=gif)
+        await ctx.send(embed=embed)
+    _cmd.__name__ = f"{name}_cmd"
+    _cmd.app_command.nsfw = True
+    return _cmd
+
+_make_nsfw_cmd(
+    "spank", "spank", "Spank someone",
+    lambda a, b, c: f"👋 **{a}** spanked **{b}**! That's **{c}** spank{'s' if c != 1 else ''} total!",
+    "😳 Spanking yourself? Bold."
+)
+_make_nsfw_cmd(
+    "lick", "lick", "Lick someone",
+    lambda a, b, c: f"👅 **{a}** licked **{b}**! That's **{c}** lick{'s' if c != 1 else ''} total!",
+    "😳 Licking yourself? That's a skill."
+)
+_make_nsfw_cmd(
+    "tease", "tease", "Tease someone",
+    lambda a, b, c: f"😈 **{a}** teased **{b}**! That's **{c}** tease{'s' if c != 1 else ''} total!",
+    "😈 Teasing yourself? Interesting."
+)
+_make_nsfw_cmd(
+    "anal", "anal", "Anal with someone",
+    lambda a, b, c: f"🔞 **{a}** went anal on **{b}**! That's **{c}** time{'s' if c != 1 else ''} total!",
+    "😳 Bold choice."
+)
+_make_nsfw_cmd(
+    "cum", "cum", "Cum on someone",
+    lambda a, b, c: f"💦 **{a}** came on **{b}**! That's **{c}** time{'s' if c != 1 else ''} total!",
+    "💦 Save it for someone else."
+)
+_make_nsfw_cmd(
+    "yuri", "yuri", "Yuri with someone",
+    lambda a, b, c: f"🌸 **{a}** and **{b}** had a yuri moment! That's **{c}** time{'s' if c != 1 else ''} total!",
+    "🌸 Solo yuri? We don't judge."
+)
 
 
 def hierarchy_error(ctx, member: discord.Member) -> str | None:
