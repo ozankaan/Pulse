@@ -954,6 +954,8 @@ async def nsfw(ctx, category: str = None):
     embed.set_footer(text=f"Category: {picked} • waifu.pics")
     await ctx.send(embed=embed)
 
+nsfw.app_command.nsfw = True
+
 
 def hierarchy_error(ctx, member: discord.Member) -> str | None:
     """Return a specific error string if the action can't proceed, or None if OK."""
