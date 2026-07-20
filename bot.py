@@ -289,6 +289,12 @@ async def help_command(ctx):
         "`?pet @member` — Pet someone (with GIF + running count).\n"
     ), inline=False)
 
+    e.add_field(name="🔞 NSFW", value=(
+        "`?nsfw [category]` — Get a random NSFW image (NSFW channels only).\n"
+        "Categories: `waifu`, `neko`, `trap`, `blowjob`, `hentai`, `oral`, `paizuri`\n"
+        "Leave blank for a random category.\n"
+    ), inline=False)
+
     e.add_field(name="🎮 Fun", value=(
         "`?8ball <question>` — Ask the magic 8-ball.\n"
         "`?coinflip` — Flip a coin.\n"
@@ -907,6 +913,45 @@ async def pet(ctx, user: discord.User):
     )
     if gif:
         embed.set_image(url=gif)
+    await ctx.send(embed=embed)
+
+
+# ── NSFW ───────────────────────────────────────────────────────────────────────
+
+NSFW_CATEGORIES = ["waifu", "neko", "trap", "blowjob", "cumslut", "hentai", "oral", "paizuri"]
+
+@bot.hybrid_command(name="nsfw", description="Get a random NSFW image (NSFW channels only).")
+@app_commands.describe(category="Category: waifu, neko, trap, blowjob, hentai, oral, paizuri (default: random)")
+async def nsfw(ctx, category: str = None):
+    if not getattr(ctx.channel, "is_nsfw", lambda: False)():
+        await ctx.send("❌ This command can only be used in an NSFW channel.", ephemeral=True)
+        return
+
+    if category and category.lower() not in NSFW_CATEGORIES:
+        cats = ", ".join(f"`{c}`" for c in NSFW_CATEGORIES)
+        await ctx.send(f"❌ Unknown category. Available: {cats}", ephemeral=True)
+        return
+
+    picked = (category.lower() if category else random.choice(NSFW_CATEGORIES))
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"https://api.waifu.pics/nsfw/{picked}",
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as r:
+                data = await r.json()
+                url = data.get("url", "")
+    except Exception:
+        url = ""
+
+    if not url:
+        await ctx.send("❌ Couldn't fetch an image right now. Try again.")
+        return
+
+    embed = discord.Embed(color=discord.Color.dark_red())
+    embed.set_image(url=url)
+    embed.set_footer(text=f"Category: {picked} • waifu.pics")
     await ctx.send(embed=embed)
 
 
