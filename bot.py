@@ -258,6 +258,7 @@ async def help_command(ctx):
     e.add_field(name="🔨 Moderation", value=(
         "`?ban @member [reason]` — Ban a member and DM them an appeal link.\n"
         "`?unban <user_id> [reason]` — Unban a user by their Discord ID.\n"
+        "`?kick @member [reason]` — Kick a member from the server.\n"
         "`?mute @member <duration> [reason]` — Timeout a member (e.g. `10m`, `2h`, `1d`).\n"
         "`?unmute @member [reason]` — Remove a timeout from a member.\n"
         "`?purge <amount>` — Bulk-delete up to 100 messages in this channel.\n"
@@ -931,6 +932,34 @@ async def ban(ctx, member: discord.Member, *, reason: str = "No reason provided.
     await ctx.send(f"✅ **{member}** has been banned. {dm_status}")
 
     embed = discord.Embed(title="🔨 Member Banned", color=discord.Color.red(),
+                          timestamp=datetime.utcnow())
+    embed.add_field(name="User", value=f"{member} (`{member.id}`)", inline=False)
+    embed.add_field(name="Reason", value=reason, inline=False)
+    embed.add_field(name="Moderator", value=str(ctx.author), inline=False)
+    embed.add_field(name="DM", value=dm_status, inline=False)
+    await send_log(ctx.guild, embed)
+
+
+# ── Kick ───────────────────────────────────────────────────────────────────────
+
+@bot.hybrid_command(name="kick", description="Kick a member from the server.")
+@commands.has_permissions(kick_members=True)
+async def kick(ctx, member: discord.Member, *, reason: str = "No reason provided."):
+    try:
+        await member.send(
+            f"You have been kicked from **{ctx.guild.name}**.\n"
+            f"**Reason:** {reason}"
+        )
+        dm_status = "DM sent."
+    except discord.Forbidden:
+        dm_status = "Could not send DM (DMs disabled or bot blocked)."
+    except Exception as e:
+        dm_status = f"DM error: {e}"
+
+    await ctx.guild.kick(member, reason=reason)
+    await ctx.send(f"✅ **{member}** has been kicked. {dm_status}")
+
+    embed = discord.Embed(title="👢 Member Kicked", color=discord.Color.orange(),
                           timestamp=datetime.utcnow())
     embed.add_field(name="User", value=f"{member} (`{member.id}`)", inline=False)
     embed.add_field(name="Reason", value=reason, inline=False)
