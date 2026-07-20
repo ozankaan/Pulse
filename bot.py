@@ -1631,19 +1631,56 @@ async def on_message(message):
 
 @bot.event
 async def on_command_error(ctx, error):
+    # Unwrap hybrid-command / app_command wrappers
+    if hasattr(error, "original"):
+        error = error.original
+
     if isinstance(error, (commands.CommandNotFound, commands.NotOwner)):
         return
+
     elif isinstance(error, commands.MissingPermissions):
-        await ctx.send("❌ You don't have permission to use this command.")
+        perms = ", ".join(p.replace("_", " ").title() for p in error.missing_permissions)
+        await ctx.send(f"❌ You don't have permission to use this command. Required: **{perms}**.")
+
+    elif isinstance(error, commands.BotMissingPermissions):
+        perms = ", ".join(p.replace("_", " ").title() for p in error.missing_permissions)
+        await ctx.send(f"❌ I'm missing the **{perms}** permission(s) needed to do that.")
+
     elif isinstance(error, commands.MemberNotFound):
-        await ctx.send("❌ Member not found.")
+        await ctx.send("❌ Member not found. Make sure you @mention them or use their exact name.")
+
+    elif isinstance(error, commands.UserNotFound):
+        await ctx.send("❌ User not found. Double-check the username or ID.")
+
     elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send(f"❌ Missing argument. Check `?help {ctx.command}`.")
+        await ctx.send(f"❌ Missing argument: **{error.param.name}**. Use `?help {ctx.command}` to see the correct usage.")
+
+    elif isinstance(error, commands.BadArgument):
+        await ctx.send(f"❌ Invalid argument. Use `?help {ctx.command}` for the correct usage.")
+
+    elif isinstance(error, commands.NoPrivateMessage):
+        await ctx.send("❌ This command can only be used in a server, not in DMs.")
+
+    elif isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(f"❌ This command is on cooldown. Try again in **{error.retry_after:.1f}s**.")
+
+    elif isinstance(error, discord.Forbidden):
+        # Covers: target is admin, higher role than bot, or bot lacks a guild perm
+        await ctx.send(
+            "❌ I can't do that. Possible reasons:\n"
+            "• The target member has a higher role than me.\n"
+            "• The target is a server administrator.\n"
+            "• I'm missing the required permission for this action."
+        )
+
+    elif isinstance(error, discord.HTTPException):
+        await ctx.send(f"❌ Discord returned an error: {error.status} — {error.text}")
+
     else:
         import traceback
         traceback.print_exception(type(error), error, error.__traceback__)
         try:
-            await ctx.send("❌ Something went wrong. Please try again.")
+            await ctx.send(f"❌ Unexpected error: `{type(error).__name__}: {error}`")
         except Exception:
             pass
 
