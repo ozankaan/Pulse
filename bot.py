@@ -320,6 +320,7 @@ async def help_command(ctx):
     e.add_field(name="🎲 Gambling", value=(
         "`?balance [@member]` — Check your coin balance (everyone starts with 1,000 🪙).\n"
         "`?daily` — Claim **500** 🪙 free coins once every 24 hours.\n"
+        "`?givemoney @member <amount>` — Give coins to a member (restricted).\n"
         "`?slots <bet>` — Spin the slot machine (min 10 🪙, jackpot = 15x).\n"
         "`?flip <bet> <heads/tails>` — Bet on a coin flip (2x payout).\n"
         "`?blackjack <bet>` — Play blackjack with Hit/Stand buttons (min 10 🪙).\n"
@@ -660,6 +661,25 @@ async def balance(ctx, member: discord.Member = None):
     embed = discord.Embed(title="💰 Wallet", color=discord.Color.gold())
     embed.set_thumbnail(url=target.display_avatar.url)
     embed.add_field(name=target.display_name, value=f"**{bal:,}** 🪙 coins", inline=False)
+    await ctx.send(embed=embed)
+
+
+GIVE_MONEY_OWNER = 649835130910670849
+
+@bot.hybrid_command(name="givemoney", description="Give coins to a member (owner only).")
+@app_commands.describe(member="Member to give coins to", amount="Amount of coins to give")
+async def givemoney(ctx, member: discord.Member, amount: int):
+    if ctx.author.id != GIVE_MONEY_OWNER:
+        await ctx.send("❌ You don't have permission to use this command.", ephemeral=True)
+        return
+    if amount <= 0:
+        await ctx.send("❌ Amount must be greater than 0.", ephemeral=True)
+        return
+    new_bal = update_balance(member.id, amount)
+    embed = discord.Embed(title="💸 Coins Given", color=discord.Color.green())
+    embed.add_field(name="Recipient", value=member.mention, inline=True)
+    embed.add_field(name="Amount", value=f"+**{amount:,}** 🪙", inline=True)
+    embed.add_field(name="New Balance", value=f"**{new_bal:,}** 🪙", inline=True)
     await ctx.send(embed=embed)
 
 
