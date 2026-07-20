@@ -910,11 +910,31 @@ async def pet(ctx, user: discord.User):
     await ctx.send(embed=embed)
 
 
+def hierarchy_error(ctx, member: discord.Member) -> str | None:
+    """Return a specific error string if the action can't proceed, or None if OK."""
+    if member == ctx.guild.owner:
+        return "❌ I can't act on the server owner."
+    if member == ctx.me:
+        return "❌ I can't act on myself."
+    if member.guild_permissions.administrator:
+        return "❌ That member is a server administrator — I can't act on them."
+    if ctx.me.top_role <= member.top_role:
+        return "❌ That member's role is higher than or equal to mine, so I can't act on them."
+    if ctx.author != ctx.guild.owner and ctx.author.top_role <= member.top_role:
+        return "❌ That member's role is higher than or equal to yours."
+    return None
+
+
 # ── Ban ────────────────────────────────────────────────────────────────────────
 
 @bot.hybrid_command(name="ban", description="Ban a member and send them an appeal link via DM.")
 @commands.has_permissions(ban_members=True)
 async def ban(ctx, member: discord.Member, *, reason: str = "No reason provided."):
+    err = hierarchy_error(ctx, member)
+    if err:
+        await ctx.send(err)
+        return
+
     try:
         await member.send(
             f"You have been banned from **{ctx.guild.name}**.\n"
@@ -945,6 +965,11 @@ async def ban(ctx, member: discord.Member, *, reason: str = "No reason provided.
 @bot.hybrid_command(name="kick", description="Kick a member from the server.")
 @commands.has_permissions(kick_members=True)
 async def kick(ctx, member: discord.Member, *, reason: str = "No reason provided."):
+    err = hierarchy_error(ctx, member)
+    if err:
+        await ctx.send(err)
+        return
+
     try:
         await member.send(
             f"You have been kicked from **{ctx.guild.name}**.\n"
@@ -1163,6 +1188,11 @@ async def clearwarns(ctx, member: discord.Member):
 @bot.hybrid_command(name="mute", description="Timeout a member for a duration (e.g. 10m, 2h, 1d).")
 @commands.has_permissions(moderate_members=True)
 async def mute(ctx, member: discord.Member, duration: str, *, reason: str = "No reason provided."):
+    err = hierarchy_error(ctx, member)
+    if err:
+        await ctx.send(err)
+        return
+
     secs = parse_duration(str(duration))
     if not secs:
         await ctx.send("❌ Invalid duration. Use formats like `10m`, `2h`, `1d`.")
