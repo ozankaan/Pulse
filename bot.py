@@ -869,6 +869,49 @@ async def fetch_gif(action: str) -> str:
         return ""
 
 
+class ActionBackView(discord.ui.View):
+    """Adds a '<action> back' button only the target can press."""
+    def __init__(self, action: str, label: str, emoji: str,
+                 gif_key: str, original_author: discord.User | discord.Member,
+                 target: discord.User | discord.Member, color: discord.Color):
+        super().__init__(timeout=60)
+        self.action = action
+        self.label  = label
+        self.emoji  = emoji
+        self.gif_key = gif_key
+        self.original_author = original_author
+        self.target = target
+        self.color  = color
+        btn = discord.ui.Button(label=f"{emoji} {label} back!", style=discord.ButtonStyle.primary)
+        btn.callback = self.back_callback
+        self.add_item(btn)
+
+    async def back_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.target.id:
+            await interaction.response.send_message(
+                "❌ Only the person who received this can respond.", ephemeral=True
+            )
+            return
+        count = increment_interaction(self.action, self.target.id, self.original_author.id)
+        gif   = await fetch_gif(self.gif_key)
+        embed = discord.Embed(
+            description=f"{self.emoji} **{self.target.display_name}** {self.label}ed **{self.original_author.display_name}** back!\n"
+                        f"That's **{count}** {self.action}{'s' if count != 1 else ''} total!",
+            color=self.color
+        )
+        if gif:
+            embed.set_image(url=gif)
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(view=self)
+        await interaction.followup.send(embed=embed)
+        self.stop()
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+
+
 @bot.hybrid_command(name="hug", description="Hug someone.")
 @app_commands.describe(user="Who do you want to hug?")
 async def hug(ctx, user: discord.User):
@@ -884,7 +927,8 @@ async def hug(ctx, user: discord.User):
     )
     if gif:
         embed.set_image(url=gif)
-    await ctx.send(embed=embed)
+    view = ActionBackView("hug", "hug", "🤗", "hug", ctx.author, user, discord.Color.orange())
+    await ctx.send(embed=embed, view=view)
 
 
 @bot.hybrid_command(name="kiss", description="Kiss someone.")
@@ -902,7 +946,8 @@ async def kiss(ctx, user: discord.User):
     )
     if gif:
         embed.set_image(url=gif)
-    await ctx.send(embed=embed)
+    view = ActionBackView("kiss", "kiss", "💋", "kiss", ctx.author, user, discord.Color.red())
+    await ctx.send(embed=embed, view=view)
 
 
 @bot.hybrid_command(name="pet", description="Pet someone.")
@@ -920,7 +965,8 @@ async def pet(ctx, user: discord.User):
     )
     if gif:
         embed.set_image(url=gif)
-    await ctx.send(embed=embed)
+    view = ActionBackView("pet", "pet", "🖐️", "pat", ctx.author, user, discord.Color.green())
+    await ctx.send(embed=embed, view=view)
 
 
 # ── NSFW ───────────────────────────────────────────────────────────────────────
