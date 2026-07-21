@@ -323,6 +323,7 @@ async def help_command(ctx):
     e.add_field(name="🎲 Gambling", value=(
         "`?balance [@member]` — Check your coin balance (everyone starts with 1,000 🪙).\n"
         "`?daily` — Claim **500** 🪙 free coins once every 24 hours.\n"
+        "`?weekly` — Claim **2,500** 🪙 free coins once every 7 days.\n"
         "`?givemoney @member <amount>` — Give coins to a member (restricted).\n"
         "`?slots <bet>` — Spin the slot machine (min 10 🪙, jackpot = 15x).\n"
         "`?flip <bet> <heads/tails>` — Bet on a coin flip (2x payout).\n"
@@ -622,8 +623,10 @@ async def ship(ctx, member1: discord.Member, member2: discord.Member = None):
 
 # ── Gambling ────────────────────────────────────────────────────────────────────
 
-DAILY_REWARD   = 500
-DAILY_COOLDOWN = 86400   # seconds
+DAILY_REWARD    = 500
+DAILY_COOLDOWN  = 86400        # 24 hours in seconds
+WEEKLY_REWARD   = 2500
+WEEKLY_COOLDOWN = 86400 * 7    # 7 days in seconds
 
 SLOTS_REELS = ["🍒", "🍋", "🍇", "💎", "7️⃣", "🎰"]
 SLOTS_MULT  = {"💎": 15, "7️⃣": 10, "🎰": 8, "🍇": 5, "🍋": 3, "🍒": 2}
@@ -701,6 +704,29 @@ async def daily(ctx):
     economy[uid]["last_daily"] = now
     new_bal = update_balance(ctx.author.id, DAILY_REWARD)
     await ctx.send(f"✅ You claimed your daily **{DAILY_REWARD:,}** 🪙! Balance: **{new_bal:,}** 🪙")
+
+
+@bot.hybrid_command(name="weekly", description="Claim your weekly 2,500-coin reward.")
+async def weekly(ctx):
+    uid = str(ctx.author.id)
+    get_balance(ctx.author.id)   # ensure entry
+    now = time.time()
+    last = economy[uid].get("last_weekly") or 0
+    remaining = WEEKLY_COOLDOWN - (now - last)
+    if remaining > 0:
+        days,    rem  = divmod(int(remaining), 86400)
+        hours,   rem  = divmod(rem, 3600)
+        mins          = rem // 60
+        parts = []
+        if days:  parts.append(f"**{days}d**")
+        if hours: parts.append(f"**{hours}h**")
+        if mins:  parts.append(f"**{mins}m**")
+        await ctx.send(f"⏳ Already claimed this week! Come back in {' '.join(parts) or '**<1m**'}.")
+        return
+    economy[uid]["last_weekly"] = now
+    save_economy(economy)
+    new_bal = update_balance(ctx.author.id, WEEKLY_REWARD)
+    await ctx.send(f"✅ You claimed your weekly **{WEEKLY_REWARD:,}** 🪙! Balance: **{new_bal:,}** 🪙")
 
 
 @bot.hybrid_command(name="slots", description="Spin the slot machine and win big.")
