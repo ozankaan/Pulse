@@ -1994,12 +1994,13 @@ async def on_command_error(ctx, error):
 
 @bot.event
 async def on_ready():
-    # Global sync — makes commands available in DMs and everywhere else
-    await bot.tree.sync()
+    # Clear any leftover guild-specific command copies (removes duplicates)
     for guild in bot.guilds:
-        bot.tree.copy_global_to(guild=guild)
-        synced = await bot.tree.sync(guild=guild)
-        print(f"Synced {len(synced)} commands to {guild.name}")
+        bot.tree.clear_commands(guild=guild)
+        await bot.tree.sync(guild=guild)
+    # Single global sync — one copy of every command everywhere
+    synced = await bot.tree.sync()
+    print(f"Synced {len(synced)} commands globally")
     print(f"Bot is online as {bot.user}")
 
     # Reschedule any giveaways that were active before restart
