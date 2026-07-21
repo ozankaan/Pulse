@@ -963,6 +963,8 @@ class ActionBackView(discord.ui.View):
 
 @bot.hybrid_command(name="hug", description="Hug someone.")
 @app_commands.describe(user="Who do you want to hug?")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def hug(ctx, user: discord.User):
     if user.id == ctx.author.id:
         await ctx.send("🤗 You hugged yourself. Lonely but valid.")
@@ -982,6 +984,8 @@ async def hug(ctx, user: discord.User):
 
 @bot.hybrid_command(name="kiss", description="Kiss someone.")
 @app_commands.describe(user="Who do you want to kiss?")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def kiss(ctx, user: discord.User):
     if user.id == ctx.author.id:
         await ctx.send("💋 You kissed yourself in the mirror. Respect.")
@@ -1001,6 +1005,8 @@ async def kiss(ctx, user: discord.User):
 
 @bot.hybrid_command(name="pet", description="Pet someone.")
 @app_commands.describe(user="Who do you want to pet?")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def pet(ctx, user: discord.User):
     if user.id == ctx.author.id:
         await ctx.send("🖐️ You patted your own head. It's okay, you tried.")
