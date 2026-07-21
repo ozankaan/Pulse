@@ -147,7 +147,10 @@ def increment_interaction(action: str, giver_id: int, target_id: int) -> int:
     interactions[action].setdefault(g, {})
     interactions[action][g][t] = interactions[action][g].get(t, 0) + 1
     save_interactions()
-    return interactions[action][g][t]
+    # Return combined total: A→B plus B→A
+    forward  = interactions[action].get(g, {}).get(t, 0)
+    backward = interactions[action].get(t, {}).get(g, 0)
+    return forward + backward
 
 interactions = load_interactions()
 
